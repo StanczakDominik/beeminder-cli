@@ -28,18 +28,10 @@ import functools
 
 username = os.environ["BEEMINDER_USERNAME"]
 beeminder_auth_token = os.environ["BEEMINDER_TOKEN"]
-auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
-all_goals = []
-url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
-r = requests.get(url, params=auth).json()
 
 
 def increment_beeminder(desc, beeminder_goal, value=1):
-    data = {
-        "value": value,
-        "auth_token": beeminder_auth_token,
-        "comment": desc,
-    }
+    data = {"value": value, "auth_token": beeminder_auth_token, "comment": desc}
 
     response = requests.post(
         f"https://www.beeminder.com/api/v1/users/{username}/goals/{beeminder_goal}/datapoints.json",
@@ -88,6 +80,11 @@ class Goal:
         return increment_beeminder(description, self.slug, value)
 
 
+auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
+all_goals = []
+url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
+r = requests.get(url, params=auth).json()
+
 for goal in r:
     goal = Goal(**goal)
     all_goals.append(goal)
@@ -110,6 +107,7 @@ def beeminder(ctx, manual=False):
 
 
 def create_subcommand(goal):
+    # TODO tbh I don't like this dynamic goal thing
     def goal_subcommand(update_value=None, description=None, test=False):
         click.echo(f"I am {goal}")
         if update_value is None:
@@ -120,7 +118,7 @@ def create_subcommand(goal):
         if test:
             click.echo(f"Running on test")
 
-    goal_subcommand.__doc__ = f"Help string for {goal}"
+    goal_subcommand.__doc__ = goal.title
     return goal_subcommand
 
 
