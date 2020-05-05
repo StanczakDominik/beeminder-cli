@@ -27,7 +27,7 @@ import os
 
 username = os.environ["BEEMINDER_USERNAME"]
 auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
-goals = []
+all_goals = []
 url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
 r = requests.get(url, params=auth).json()
 
@@ -41,6 +41,8 @@ class Goal:
         self.slug = goal["slug"]
         self.limsum = goal["limsum"]
         self.title = goal["title"]
+        self.autodata = goal["autodata"]
+        self.dictionary = goal
 
     @property
     def formatted_losedate(self):
@@ -51,19 +53,38 @@ class Goal:
     def summary(self):
         ts = self.formatted_losedate
         return f"{self.slug.upper():18}{self.limsum:27} derails at {ts:25}{self.title}"
+    
+    @property
+    def is_manual(self):
+        return self.autodata is None
 
 
 for goal in r:
     goal = Goal(**goal)
-    goals.append(goal)
+    all_goals.append(goal)
 
 
-@click.command()
-def show_timings(manual = False):
+@click.group(invoke_without_command=True)
+@click.option('--manual/--no-manual', default=False)
+@click.pass_context
+def beeminder(ctx, manual = False):
     """Display timings for beeminder goals."""
-    for goal in sorted(goals, key=lambda g: g.losedate):
-        click.echo(goal.summary)
+    if ctx.invoked_subcommand is None:
+        click.echo('I was invoked without subcommand')
+        goals = all_goals.copy()
+        if manual:
+            goals = filter(lambda g: g.is_manual, goals)
+        for goal in sorted(goals, key=lambda g: g.losedate):
+            click.echo(goal.summary)
+
+    else:
+
+        click.echo('I am about to invoke %s' % ctx.invoked_subcommand)
+
+@beeminder.command()
+def test():
+    click.echo("Boo!")
 
 
 if __name__ == "__main__":
-    show_timings()
+    beeminder()
