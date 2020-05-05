@@ -110,6 +110,7 @@ def create_subcommand(goal):
         click.echo(f"I am {goal}")
         if update_value is None:
             click.echo(goal.summary)
+            # TODO breakpoint()
         else:
             goal.update(update_value, description)
         if test:
