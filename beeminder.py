@@ -27,11 +27,24 @@ import os
 import functools
 
 username = os.environ["BEEMINDER_USERNAME"]
+beeminder_auth_token = os.environ['BEEMINDER_TOKEN']
 auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
 all_goals = []
 url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
 r = requests.get(url, params=auth).json()
 
+def increment_beeminder(desc, beeminder_goal, value=1):
+    data = {
+        "value": value,
+        "auth_token": beeminder_auth_token,
+        "comment": desc,
+    }
+
+    response = requests.post(
+        f"https://www.beeminder.com/api/v1/users/{username}/goals/{beeminder_goal}/datapoints.json",
+        data=data,
+    )
+    return response
 
 class Goal:
     """Wraps a Beeminder goal."""
@@ -70,8 +83,7 @@ class Goal:
         if description is None:
             description = self.default_description
         click.echo(f"Updating {self} with {value} and description {description}")
-        return NotImplemented
-
+        return increment_beeminder(description, self.slug, value)
 
 for goal in r:
     goal = Goal(**goal)
@@ -79,7 +91,7 @@ for goal in r:
 
 
 @click.group(invoke_without_command=True)
-@click.option('--manual/--no-manual', default=False)
+@click.option('--manual', is_flag=True)
 @click.pass_context
 def beeminder(ctx, manual = False):
     """Display timings for beeminder goals."""
@@ -108,8 +120,8 @@ def create_subcommand(goal):
 
 for goal in all_goals:
     command = create_subcommand(goal)
-    command = click.option('--test/--no-test', default = False, help = 'blah')(command)
-    command = click.option('-u', '--update-value', default = None)(command)
+    command = click.option('--test', is_flag=True, help = 'blah')(command)
+    command = click.option('-u', '--update-value', default = None, type=float)(command)
     command = click.option('-d', '--description', default = None)(command)
     command = beeminder.command(name=goal.slug)(command)
 
