@@ -24,6 +24,7 @@ import requests
 from datetime import datetime
 import click
 import os
+import functools
 
 username = os.environ["BEEMINDER_USERNAME"]
 auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
@@ -87,13 +88,13 @@ def create_subcommand(goal):
         click.echo(f"I am {goal}")
         if test:
             click.echo(f"Running on test")
+    goal_subcommand.__doc__ = f"Help string for {goal}"
     return goal_subcommand
 
 
 for goal in all_goals:
     command = create_subcommand(goal)
-    # command = click.pass_context(command)
-    command = click.option('--test/--no-test', default = False)(command)
+    command = click.option('--test/--no-test', default = False, help = 'blah')(command)
     command = beeminder.command(name=goal.slug)(command)
 
 if __name__ == "__main__":
