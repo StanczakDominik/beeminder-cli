@@ -10,7 +10,7 @@ lists only manually updatable goals
 >>> beeminder books
 updates; asks for values
 >>> beeminder books 1
-updates; asks for description
+updates; default description
 >>> beeminder books 1 "#PlasmaWaves"
 updates; asks for nothing
 >>> beeminder jrnl
@@ -94,12 +94,12 @@ def beeminder(ctx, manual = False):
         click.echo('I am about to invoke %s' % ctx.invoked_subcommand)
 
 def create_subcommand(goal):
-    def goal_subcommand(update_value = None, test = False):
+    def goal_subcommand(update_value = None, description = None, test = False):
         click.echo(f"I am {goal}")
         if update_value is None:
             click.echo(goal.summary)
         else:
-            goal.update(update_value)
+            goal.update(update_value, description)
         if test:
             click.echo(f"Running on test")
     goal_subcommand.__doc__ = f"Help string for {goal}"
@@ -110,6 +110,7 @@ for goal in all_goals:
     command = create_subcommand(goal)
     command = click.option('--test/--no-test', default = False, help = 'blah')(command)
     command = click.option('-u', '--update-value', default = None)(command)
+    command = click.option('-d', '--description', default = None)(command)
     command = beeminder.command(name=goal.slug)(command)
 
 if __name__ == "__main__":
