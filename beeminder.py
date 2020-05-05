@@ -91,7 +91,7 @@ for goal in r:
 
 
 @click.group(invoke_without_command=True)
-@click.option("--manual", is_flag=True)
+@click.option("-m", "--manual", is_flag=True)
 @click.pass_context
 def beeminder(ctx, manual=False):
     """Display timings for beeminder goals."""
