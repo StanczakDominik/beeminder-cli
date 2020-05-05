@@ -106,28 +106,22 @@ def beeminder(ctx, manual=False):
         click.echo("I am about to invoke %s" % ctx.invoked_subcommand)
 
 
-def create_subcommand(goal):
-    # TODO tbh I don't like this dynamic goal thing
-    def goal_subcommand(update_value=None, description=None, test=False):
-        click.echo(f"I am {goal}")
-        if update_value is None:
-            click.echo(goal.summary)
-            # TODO breakpoint()
-        else:
-            goal.update(update_value, description)
-        if test:
-            click.echo(f"Running on test")
+@beeminder.command()
+@click.option("-u", "--update-value", default=None, type=float)
+@click.option("-d", "--description", default=None)
+@click.argument("goal")
+def update(goal, update_value=None, description=None, test=False):
+    goal = next(filter(lambda g: g.slug == goal, all_goals))
 
-    goal_subcommand.__doc__ = goal.title
-    return goal_subcommand
+    click.echo(f"I am {goal}")
+    if update_value is None:
+        click.echo(goal.summary)
+        # TODO breakpoint()
+    else:
+        goal.update(update_value, description)
+    if test:
+        click.echo(f"Running on test")
 
-
-for goal in all_goals:
-    command = create_subcommand(goal)
-    command = click.option("--test", is_flag=True, help="blah")(command)
-    command = click.option("-u", "--update-value", default=None, type=float)(command)
-    command = click.option("-d", "--description", default=None)(command)
-    command = beeminder.command(name=goal.slug)(command)
 
 if __name__ == "__main__":
     beeminder()
