@@ -1,5 +1,6 @@
-"""
-Example usage:
+"""Utility script for CLI Beeminder usage.
+
+Example usage/API design doc draft:
 
 >>> beeminder
 lists existing goals
@@ -15,6 +16,7 @@ updates; asks for nothing
 this is an api goal; checks for registered handlers, applies them; can be called via systemctl assuming secrets are provided...
 >>> beeminder todoist
 this is an external goal; displays useful information
+>>> beeminder todoist edit
 """
 
 
@@ -30,13 +32,15 @@ auth = {"username":username,"auth_token":os.environ["BEEMINDER_TOKEN"]}
 goals = []
 url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
 r = requests.get(url, params=auth).json()
-Goal = None
+
+class Goal:
+    def __init__(self, **goal):
+        self.losedate = goal['losedate']
+        self.slug = goal['slug']
+        self.limsum = goal['limsum']
+        self.title = goal['title']
 
 for goal in r:
-    # TODO handle myself
-    if Goal is None:
-        Goal = namedtuple("Goal", sorted(goal))
-
     goal = Goal(**goal)
     goals.append(goal)
 
