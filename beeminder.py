@@ -58,6 +58,9 @@ class Goal:
     def is_manual(self):
         return self.autodata is None
 
+    def __repr__(self, *args, **kwargs):
+        return f"Goal({self.slug})"
+
 
 for goal in r:
     goal = Goal(**goal)
@@ -76,15 +79,22 @@ def beeminder(ctx, manual = False):
             goals = filter(lambda g: g.is_manual, goals)
         for goal in sorted(goals, key=lambda g: g.losedate):
             click.echo(goal.summary)
-
     else:
-
         click.echo('I am about to invoke %s' % ctx.invoked_subcommand)
 
-@beeminder.command()
-def test():
-    click.echo("Boo!")
+def create_subcommand(goal):
+    def goal_subcommand(test = False):
+        click.echo(f"I am {goal}")
+        if test:
+            click.echo(f"Running on test")
+    return goal_subcommand
 
+
+for goal in all_goals:
+    command = create_subcommand(goal)
+    # command = click.pass_context(command)
+    command = click.option('--test/--no-test', default = False)(command)
+    command = beeminder.command(name=goal.slug)(command)
 
 if __name__ == "__main__":
     beeminder()
