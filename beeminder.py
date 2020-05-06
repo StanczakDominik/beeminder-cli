@@ -107,20 +107,21 @@ def beeminder(ctx, manual=False):
 
 
 @beeminder.command()
-@click.option("-u", "--update-value", default=None, type=float)
-@click.option("-d", "--description", default=None)
 @click.argument("goal")
-def update(goal, update_value=None, description=None, test=False):
+def show(goal):
+    goal = next(filter(lambda g: g.slug == goal, all_goals))
+    click.echo(goal.summary)
+
+
+@beeminder.command()
+@click.option("-d", "--description", default=None)
+@click.argument("goal", type=str)
+@click.argument("update_value", type=float)
+def update(goal, update_value, description=None):
     goal = next(filter(lambda g: g.slug == goal, all_goals))
 
     click.echo(f"I am {goal}")
-    if update_value is None:
-        click.echo(goal.summary)
-        # TODO breakpoint()
-    else:
-        goal.update(update_value, description)
-    if test:
-        click.echo(f"Running on test")
+    goal.update(update_value, description)
 
 
 if __name__ == "__main__":
