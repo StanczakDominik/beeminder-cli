@@ -50,6 +50,7 @@ class Goal:
         self.limsum = goal["limsum"]
         self.title = goal["title"]
         self.autodata = goal["autodata"]
+        self.type = goal["goal_type"]
         self.dictionary = goal
 
     @property
@@ -61,6 +62,10 @@ class Goal:
     def summary(self):
         ts = self.formatted_losedate
         return f"{self.slug.upper():18}{self.limsum:27} derails at {ts:25}{self.title}"
+
+    @property
+    def is_do_less(self):
+        return self.type == "drinker"  # and a fiend
 
     @property
     def is_manual(self):
@@ -92,18 +97,20 @@ for goal in r:
 
 @click.group(invoke_without_command=True)
 @click.option("-m", "--manual", is_flag=True)
+@click.option("-ndl", "--no-do-less", is_flag=True)
 @click.pass_context
-def beeminder(ctx, manual=False):
+def beeminder(ctx, manual=False, no_do_less=False):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
-        click.echo("I was invoked without subcommand")
         goals = all_goals.copy()
         if manual:
             goals = filter(lambda g: g.is_manual, goals)
+        if no_do_less:
+            goals = filter(lambda g: not g.is_do_less, goals)
         for goal in sorted(goals, key=lambda g: g.losedate):
             click.echo(goal.summary)
     else:
-        click.echo("I am about to invoke %s" % ctx.invoked_subcommand)
+        pass
 
 
 @beeminder.command()
@@ -120,7 +127,6 @@ def show(goal):
 def update(goal, update_value, description=None):
     goal = next(filter(lambda g: g.slug == goal, all_goals))
 
-    click.echo(f"I am {goal}")
     goal.update(update_value, description)
 
 
