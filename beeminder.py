@@ -25,6 +25,8 @@ from datetime import datetime
 import click
 import os
 import functools
+import math
+from random import choice
 
 username = os.environ["BEEMINDER_USERNAME"]
 beeminder_auth_token = os.environ["BEEMINDER_TOKEN"]
@@ -98,8 +100,10 @@ for goal in r:
 @click.group(invoke_without_command=True)
 @click.option("-m", "--manual", is_flag=True)
 @click.option("-ndl", "--no-do-less", is_flag=True)
+@click.option("-n", type=int)
+@click.option("-r", "--random", is_flag=True)
 @click.pass_context
-def beeminder(ctx, manual=False, no_do_less=False):
+def beeminder(ctx, manual=False, no_do_less=False, n=None, random=False):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
         goals = all_goals.copy()
@@ -107,7 +111,17 @@ def beeminder(ctx, manual=False, no_do_less=False):
             goals = filter(lambda g: g.is_manual, goals)
         if no_do_less:
             goals = filter(lambda g: not g.is_do_less, goals)
-        for goal in sorted(goals, key=lambda g: g.losedate):
+        goals = sorted(goals, key=lambda g: g.losedate)
+
+        if n is not None:
+            n = int(n)
+            goals = goals[:n]
+
+        if random:
+            click.echo(choice(goals).summary)
+            return
+
+        for goal in goals:
             click.echo(goal.summary)
     else:
         pass
