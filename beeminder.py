@@ -81,6 +81,8 @@ class Goal:
         return f"Updated from {self} at {datetime.now()}"
 
     def update(self, value, description=None):
+        if value is None:
+            raise ValueError("You need to provide an update value!")
         if description is None:
             description = self.default_description
         click.echo(f"Updating {self} with {value} and description {description}")
@@ -155,7 +157,7 @@ def show(goal):
 @beeminder.command()
 @click.option("-d", "--description", default=None)
 @click.argument("goal", type=str)
-@click.argument("update_value", type=float)
+@click.argument("update_value", type=float, required=False)
 def update(goal, update_value, description=None):
     goal = next(filter(lambda g: g.slug == goal, all_goals))
 
