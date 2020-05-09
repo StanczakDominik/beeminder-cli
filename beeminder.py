@@ -74,7 +74,7 @@ class Goal:
         return self.autodata is None
 
     def __repr__(self, *args, **kwargs):
-        return f"Goal({self.slug})"
+        return f"{self.__class__.__name__}({self.slug})"
 
     @property
     def default_description(self):
@@ -87,13 +87,31 @@ class Goal:
         return increment_beeminder(description, self.slug, value)
 
 
+class RemoteApiGoal(Goal):
+    def update(self, *args, **kwargs):
+        click.echo(
+            "This is a remote goal, I can't update it from here."
+            "I'm going to ignore this and just call for a remote update."
+        )
+        url = f"https://www.beeminder.com/api/v1/users/{username}/goals/{self.slug}/refresh_graph.json"
+        r = requests.get(url, params=auth)
+
+
 auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
 all_goals = []
 url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
 r = requests.get(url, params=auth).json()
 
+
+def create_goal(**goal):
+    if goal["autodata"] is None:
+        return Goal(**goal)
+    else:
+        return RemoteApiGoal(**goal)
+
+
 for goal in r:
-    goal = Goal(**goal)
+    goal = create_goal(**goal)
     all_goals.append(goal)
 
 
