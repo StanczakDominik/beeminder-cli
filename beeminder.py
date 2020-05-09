@@ -42,6 +42,15 @@ def increment_beeminder(desc, beeminder_goal, value=1):
     return response
 
 
+class Datapoint:
+    def __init__(self, **datapoint):
+        self.value = datapoint["value"]
+        self.comment = datapoint["comment"]
+        self.timestamp = datapoint["timestamp"]
+        self.canonical = datapoint["canonical"]
+        self.dictionary = datapoint
+
+
 class Goal:
     """Wraps a Beeminder goal."""
 
@@ -53,6 +62,8 @@ class Goal:
         self.title = goal["title"]
         self.autodata = goal["autodata"]
         self.type = goal["goal_type"]
+        self.headsum = goal["headsum"]
+        self.last_datapoint = Datapoint(**goal["last_datapoint"])
         self.dictionary = goal
 
     @property
@@ -63,7 +74,7 @@ class Goal:
     @property
     def summary(self):
         ts = self.formatted_losedate
-        return f"{self.slug.upper():18}{self.limsum:27} derails at {ts:25}{self.title}"
+        return f"{self.slug.upper():25}{self.limsum:27}{self.last_datapoint.canonical}"
 
     @property
     def is_do_less(self):
