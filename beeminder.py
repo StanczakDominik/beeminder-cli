@@ -27,6 +27,7 @@ import os
 import functools
 import math
 from random import choice
+import webbrowser
 
 username = os.environ["BEEMINDER_USERNAME"]
 beeminder_auth_token = os.environ["BEEMINDER_TOKEN"]
@@ -108,6 +109,10 @@ class Goal:
         click.echo(f"Updating {self} with {value} and description {description}")
         return increment_beeminder(description, self.slug, value)
 
+    def show_web(self):
+        goal_url = f"https://www.beeminder.com/{username}/{self.slug}"
+        webbrowser.open(goal_url)
+
 
 class RemoteApiGoal(Goal):
     def update(self, *args, **kwargs):
@@ -146,21 +151,19 @@ for goal in r:
 
 
 @click.group(invoke_without_command=True)
-@click.option("-m", "--manual", is_flag=True)
-@click.option("-ndl", "--no-do-less", is_flag=True)
+@click.option("-m/-nm", "--manual/--no-manual", default=None)
+@click.option("-dl/-ndl", "--do-less/--no-do-less", default=None)
+@click.option("-dt/-ndt", "--done-today/--not-done-today", default=None)
 @click.option("-n", type=int)
 @click.option("-r", "--random", is_flag=True)
-@click.option("-dt/-ndt", "--done-today/--not-done-today", default=None)
 @click.pass_context
-def beeminder(
-    ctx, manual=False, no_do_less=False, n=None, random=False, done_today=None
-):
+def beeminder(ctx, manual=None, do_less=None, done_today=None, n=None, random=False):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
         goals = all_goals.copy()
-        if manual:
+        if manual is not None:
             goals = filter(lambda g: g.is_manual, goals)
-        if no_do_less:
+        if do_less is not None:
             goals = filter(lambda g: not g.is_do_less, goals)
         if done_today is not None:
             goals = filter(lambda g: g.is_updated_today == done_today, goals)
@@ -180,10 +183,14 @@ def beeminder(
         pass
 
 
+def pick_goal(slug):
+    return next(filter(lambda g: g.slug == slug, all_goals))
+
+
 @beeminder.command()
 @click.argument("goal")
 def show(goal):
-    goal = next(filter(lambda g: g.slug == goal, all_goals))
+    goal = pick_goal(goal)
     click.echo(goal.summary)
 
 
@@ -192,9 +199,15 @@ def show(goal):
 @click.argument("goal", type=str)
 @click.argument("update_value", type=float, required=False)
 def update(goal, update_value, description=None):
-    goal = next(filter(lambda g: g.slug == goal, all_goals))
-
+    goal = pick_goal(goal)
     goal.update(update_value, description)
+
+
+@beeminder.command()
+@click.argument("goal", type=str)
+def web(goal):
+    goal = pick_goal(goal)
+    goal.show_web()
 
 
 @beeminder.command()
