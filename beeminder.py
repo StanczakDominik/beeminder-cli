@@ -112,7 +112,7 @@ class Goal:
 class RemoteApiGoal(Goal):
     def update(self, *args, **kwargs):
         click.echo(
-            "This is a remote goal, I can't update it from here."
+            "This is a remote goal, I can't update it from here.\n"
             "I'm going to ignore this and just call for a remote update."
         )
         url = f"https://www.beeminder.com/api/v1/users/{username}/goals/{self.slug}/refresh_graph.json"
@@ -150,7 +150,7 @@ for goal in r:
 @click.option("-ndl", "--no-do-less", is_flag=True)
 @click.option("-n", type=int)
 @click.option("-r", "--random", is_flag=True)
-@click.option("--done-today/--not-done-today", default=None)
+@click.option("-dt/-ndt", "--done-today/--not-done-today", default=None)
 @click.pass_context
 def beeminder(
     ctx, manual=False, no_do_less=False, n=None, random=False, done_today=None
