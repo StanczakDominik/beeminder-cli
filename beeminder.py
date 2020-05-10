@@ -49,6 +49,11 @@ class Datapoint:
         self.timestamp = datapoint["timestamp"]
         self.canonical = datapoint["canonical"]
         self.dictionary = datapoint
+        self.datetime = datetime.fromtimestamp(self.timestamp)
+
+    @property
+    def is_updated_today(self):
+        return self.datetime.date() == datetime.now().date()
 
 
 class Goal:
@@ -84,6 +89,10 @@ class Goal:
     def is_manual(self):
         return self.autodata is None
 
+    @property
+    def is_updated_today(self):
+        return self.last_datapoint.is_updated_today
+
     def __repr__(self, *args, **kwargs):
         return f"{self.__class__.__name__}({self.slug})"
 
@@ -110,6 +119,12 @@ class RemoteApiGoal(Goal):
         r = requests.get(url, params=auth)
 
 
+class TogglGoal(RemoteApiGoal):
+    @property
+    def is_updated_today(self):
+        return not (self.last_datapoint.value == 0.0)
+
+
 auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
 all_goals = []
 url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
@@ -119,6 +134,8 @@ r = requests.get(url, params=auth).json()
 def create_goal(**goal):
     if goal["autodata"] is None:
         return Goal(**goal)
+    elif goal["autodata"] == "toggl":
+        return TogglGoal(**goal)
     else:
         return RemoteApiGoal(**goal)
 
@@ -133,8 +150,11 @@ for goal in r:
 @click.option("-ndl", "--no-do-less", is_flag=True)
 @click.option("-n", type=int)
 @click.option("-r", "--random", is_flag=True)
+@click.option("--done-today/--not-done-today", default=None)
 @click.pass_context
-def beeminder(ctx, manual=False, no_do_less=False, n=None, random=False):
+def beeminder(
+    ctx, manual=False, no_do_less=False, n=None, random=False, done_today=None
+):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
         goals = all_goals.copy()
@@ -142,6 +162,8 @@ def beeminder(ctx, manual=False, no_do_less=False, n=None, random=False):
             goals = filter(lambda g: g.is_manual, goals)
         if no_do_less:
             goals = filter(lambda g: not g.is_do_less, goals)
+        if done_today is not None:
+            goals = filter(lambda g: g.is_updated_today == done_today, goals)
         goals = sorted(goals, key=lambda g: g.losedate)
 
         if n is not None:
@@ -173,6 +195,11 @@ def update(goal, update_value, description=None):
     goal = next(filter(lambda g: g.slug == goal, all_goals))
 
     goal.update(update_value, description)
+
+
+@beeminder.command()
+def debug():
+    breakpoint()
 
 
 if __name__ == "__main__":
