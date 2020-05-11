@@ -137,12 +137,14 @@ r = requests.get(url, params=auth).json()
 
 
 def create_goal(**goal):
-    if goal["autodata"] is None:
+    if goal["autodata"] is None or goal["autodata"] == "api":
         return Goal(**goal)
     elif goal["autodata"] == "toggl":
         return TogglGoal(**goal)
-    else:
+    elif goal["autodata"] != "api":
         return RemoteApiGoal(**goal)
+    else:
+        raise ValueError(f"What autodata is {goal['autodata']}?")
 
 
 for goal in r:
