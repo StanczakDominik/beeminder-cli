@@ -116,12 +116,14 @@ class Goal:
 
 class RemoteApiGoal(Goal):
     def update(self, *args, **kwargs):
-        click.echo(
-            "This is a remote goal, I can't update it from here.\n"
-            "I'm going to ignore this and just call for a remote update."
-        )
+        if args or kwargs:
+            click.echo(
+                "This is a remote goal, I can't update it from here.\n"
+                "I'm going to ignore this and just call for a remote update."
+            )
         url = f"https://www.beeminder.com/api/v1/users/{username}/goals/{self.slug}/refresh_graph.json"
         r = requests.get(url, params=auth)
+        click.echo(f"Updated {self.slug}.")
 
 
 class TogglGoal(RemoteApiGoal):
