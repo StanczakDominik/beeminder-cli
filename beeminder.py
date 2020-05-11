@@ -54,7 +54,7 @@ class Datapoint:
 
     @property
     def is_updated_today(self):
-        return self.datetime.date() == datetime.now().date()
+        return self.datetime.date() >= datetime.now().date()
 
 
 class Goal:
