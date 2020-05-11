@@ -215,6 +215,16 @@ def web(goal):
 
 
 @beeminder.command()
+def update_remotes():
+    def only_remotes(goal):
+        return not (goal.autodata is None or goal.autodata == "api")
+
+    goals = filter(only_remotes, all_goals)
+    for goal in goals:
+        goal.update()
+
+
+@beeminder.command()
 def debug():
     breakpoint()
 
