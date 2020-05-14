@@ -199,9 +199,9 @@ def show(goal):
 
 
 @beeminder.command()
-@click.option("-d", "--description", default=None)
 @click.argument("goal", type=str)
-@click.argument("update_value", type=float, required=False)
+@click.argument("update_value", required=False)
+@click.argument("description", type=str, required=False)
 def update(goal, update_value, description=None):
     goal = pick_goal(goal)
     goal.update(update_value, description)
