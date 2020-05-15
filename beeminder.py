@@ -21,7 +21,7 @@ this is an external goal; displays useful information
 >>> beeminder todoist edit
 """
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import click
 import os
 import functools
@@ -62,7 +62,7 @@ class Goal:
 
     def __init__(self, **goal):
         """TODO."""
-        self.losedate = goal["losedate"]
+        self.losedate = datetime.utcfromtimestamp(goal["losedate"])
         self.slug = goal["slug"]
         self.limsum = goal["limsum"]
         self.title = goal["title"]
@@ -74,8 +74,7 @@ class Goal:
 
     @property
     def formatted_losedate(self):
-        date = datetime.utcfromtimestamp(self.losedate)
-        return date.strftime("%Y-%m-%d %H:%M:%S")
+        return self.losedate.strftime("%Y-%m-%d %H:%M:%S")
 
     @property
     def summary(self):
@@ -158,10 +157,13 @@ for goal in r:
 @click.option("-m/-nm", "--manual/--no-manual", default=None)
 @click.option("-dl/-ndl", "--do-less/--no-do-less", default=None)
 @click.option("-dt/-ndt", "--done-today/--not-done-today", default=None)
+@click.option("-d", "--days", type=int)
 @click.option("-n", type=int)
 @click.option("-r", "--random", is_flag=True)
 @click.pass_context
-def beeminder(ctx, manual=None, do_less=None, done_today=None, n=None, random=False):
+def beeminder(
+    ctx, manual=None, do_less=None, done_today=None, days=None, n=None, random=False
+):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
         goals = all_goals.copy()
@@ -172,6 +174,11 @@ def beeminder(ctx, manual=None, do_less=None, done_today=None, n=None, random=Fa
         if done_today is not None:
             goals = filter(lambda g: g.is_updated_today == done_today, goals)
         goals = sorted(goals, key=lambda g: g.losedate)
+
+        if days is not None:
+            days = int(days)
+            horizon = datetime.now() + timedelta(days=days)
+            goals = filter(lambda g: g.losedate <= horizon, goals)
 
         if n is not None:
             n = int(n)
