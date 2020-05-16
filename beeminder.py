@@ -29,6 +29,8 @@ import math
 from random import choice
 import webbrowser
 
+__version__ = "0.1.0"
+
 username = os.environ["BEEMINDER_USERNAME"]
 beeminder_auth_token = os.environ["BEEMINDER_TOKEN"]
 
