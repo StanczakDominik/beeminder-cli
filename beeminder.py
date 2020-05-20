@@ -64,14 +64,20 @@ class Goal:
 
     def __init__(self, **goal):
         """TODO."""
-        self.losedate = datetime.utcfromtimestamp(goal["losedate"])
-        self.slug = goal["slug"]
-        self.limsum = goal["limsum"]
-        self.title = goal["title"]
-        self.autodata = goal["autodata"]
-        self.type = goal["goal_type"]
-        self.headsum = goal["headsum"]
-        self.last_datapoint = Datapoint(**goal["last_datapoint"])
+        if "losedate" in goal:
+            self.losedate = datetime.utcfromtimestamp(goal["losedate"])
+        else:
+            self.losedate = None
+        self.slug = goal.get("slug")
+        self.limsum = goal.get("limsum")
+        self.title = goal.get("title")
+        self.autodata = goal.get("autodata")
+        self.type = goal.get("goal_type")
+        self.headsum = goal.get("headsum")
+        if "last_datapoint" in goal:
+            self.last_datapoint = Datapoint(**goal["last_datapoint"])
+        else:
+            self.last_datapoint = None
         self.dictionary = goal
 
     @property
@@ -80,7 +86,6 @@ class Goal:
 
     @property
     def summary(self):
-        ts = self.formatted_losedate
         return f"{self.slug.upper():25}{self.limsum:27}{self.last_datapoint.canonical}"
 
     @property
@@ -133,14 +138,8 @@ class TogglGoal(RemoteApiGoal):
         return not (self.last_datapoint.value == 0.0)
 
 
-auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
-all_goals = []
-url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
-r = requests.get(url, params=auth).json()
-
-
 def create_goal(**goal):
-    if goal["autodata"] is None or goal["autodata"] == "api":
+    if goal.get("autodata") is None or goal.get("autodata") == "api":
         return Goal(**goal)
     elif goal["autodata"] == "toggl":
         return TogglGoal(**goal)
@@ -150,9 +149,16 @@ def create_goal(**goal):
         raise ValueError(f"What autodata is {goal['autodata']}?")
 
 
-for goal in r:
-    goal = create_goal(**goal)
-    all_goals.append(goal)
+def get_all_goals():
+    auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
+    all_goals = []
+    url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
+    r = requests.get(url, params=auth).json()
+
+    for goal in r:
+        goal = create_goal(**goal)
+        all_goals.append(goal)
+    return all_goals
 
 
 @click.group(invoke_without_command=True)
@@ -168,7 +174,7 @@ def beeminder(
 ):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
-        goals = all_goals.copy()
+        goals = get_all_goals()
         if manual is not None:
             goals = filter(lambda g: g.is_manual, goals)
         if do_less is not None:
@@ -196,14 +202,10 @@ def beeminder(
         pass
 
 
-def pick_goal(slug):
-    return next(filter(lambda g: g.slug == slug, all_goals))
-
-
 @beeminder.command()
 @click.argument("goal")
 def show(goal):
-    goal = pick_goal(goal)
+    goal = create_goal(slug=goal)
     click.echo(goal.summary)
 
 
@@ -212,14 +214,14 @@ def show(goal):
 @click.argument("update_value", required=False)
 @click.argument("description", type=str, required=False)
 def update(goal, update_value, description=None):
-    goal = pick_goal(goal)
+    goal = create_goal(slug=goal)
     goal.update(update_value, description)
 
 
 @beeminder.command()
 @click.argument("goal", type=str)
 def web(goal):
-    goal = pick_goal(goal)
+    goal = create_goal(slug=goal)
     goal.show_web()
 
 
@@ -228,6 +230,7 @@ def update_remotes():
     def only_remotes(goal):
         return not (goal.autodata is None or goal.autodata == "api")
 
+    all_goals = get_all_goals()
     goals = filter(only_remotes, all_goals)
     for goal in goals:
         goal.update()
