@@ -33,6 +33,7 @@ __version__ = "0.1.0"
 
 username = os.environ["BEEMINDER_USERNAME"]
 beeminder_auth_token = os.environ["BEEMINDER_TOKEN"]
+auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
 
 
 def increment_beeminder(desc, beeminder_goal, value=1):
@@ -74,6 +75,7 @@ class Goal:
         self.autodata = goal.get("autodata")
         self.type = goal.get("goal_type")
         self.headsum = goal.get("headsum")
+        self.hhmmformat = goal.get("hhmmformat")
         if "last_datapoint" in goal:
             self.last_datapoint = Datapoint(**goal["last_datapoint"])
         else:
@@ -150,7 +152,6 @@ def create_goal(**goal):
 
 
 def get_all_goals():
-    auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
     all_goals = []
     url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
     r = requests.get(url, params=auth).json()
