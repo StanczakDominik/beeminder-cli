@@ -28,6 +28,8 @@ import functools
 import math
 from random import choice
 import webbrowser
+import humanize
+import math
 
 __version__ = "0.1.0"
 
@@ -66,9 +68,9 @@ class Goal:
     def __init__(self, **goal):
         """TODO."""
         if "losedate" in goal:
-            self.losedate = datetime.utcfromtimestamp(goal["losedate"])
+            self._losedate = datetime.utcfromtimestamp(goal["losedate"])
         else:
-            self.losedate = None
+            self._losedate = None
         self.slug = goal.get("slug")
         self.limsum = goal.get("limsum")
         self.title = goal.get("title")
@@ -76,19 +78,66 @@ class Goal:
         self.type = goal.get("goal_type")
         self.headsum = goal.get("headsum")
         self.hhmmformat = goal.get("hhmmformat")
+        self.integery = goal.get("integery")
+        self.safebump = goal.get("safebump")
+        self.curval = goal.get("curval")
         if "last_datapoint" in goal:
             self.last_datapoint = Datapoint(**goal["last_datapoint"])
         else:
             self.last_datapoint = None
         self.dictionary = goal
+        self.datapoints = []
+
+    @property
+    def bump(self):
+        delta = self.safebump - self.curval
+        if self.hhmmformat:
+            return humanize.naturaldelta(timedelta(hours=delta))
+        else:
+            return int(math.floor(delta))
+
+    @property
+    def losedate(self):
+        if "backlog" in self.slug:
+            self.ensure_datapoints()
+            datapoints = self.datapoints
+            today = datetime.now().date()
+            i = 0
+            dp_today = list(
+                filter(
+                    lambda dp: dp.datetime.date() == today - timedelta(days=i),
+                    datapoints,
+                )
+            )
+            while not dp_today:
+                i += 1
+                dp_today = list(
+                    filter(
+                        lambda dp: dp.datetime.date() == today - timedelta(days=i),
+                        datapoints,
+                    )
+                )
+            dp_yesterday = list(filter(lambda dp: dp not in dp_today, datapoints))
+            delta = dp_today[0].value - dp_yesterday[-1].value
+            if delta < 0:
+                return self._losedate
+            timedel = dp_today[0].datetime - dp_yesterday[-1].datetime
+            est_rate = -delta / (timedel.total_seconds() / 24 / 3600)
+            actual_time = datetime.now() + timedelta(
+                days=self.dictionary["delta"] / est_rate
+            )
+            beeminder_time = self._losedate
+            return min([actual_time, beeminder_time])
+        else:
+            return self._losedate
 
     @property
     def formatted_losedate(self):
-        return self.losedate.strftime("%Y-%m-%d %H:%M:%S")
+        return self.losedate.strftime("%Y-%m-%d")
 
     @property
     def summary(self):
-        return f"{self.slug.upper():25}{self.limsum:27}{self.last_datapoint.canonical}"
+        return f"{self.slug.upper():25}{self.bump:^15}{self.formatted_losedate:12}{self.last_datapoint.canonical}"
 
     @property
     def is_do_less(self):
@@ -98,9 +147,29 @@ class Goal:
     def is_manual(self):
         return self.autodata is None
 
+    def ensure_datapoints(self):
+        if not self.datapoints:
+            url = f"https://www.beeminder.com/api/v1/users/{username}/goals/{self.slug}.json"
+            params = auth.copy()
+            params["datapoints"] = "true"
+            r = requests.get(url, params=params).json()
+            datapoints = [Datapoint(**dp) for dp in r["datapoints"]]
+            self.datapoints = sorted(datapoints, key=lambda dp: dp.datetime)
+
     @property
     def is_updated_today(self):
-        return self.last_datapoint.is_updated_today
+        if "backlog" in self.slug:
+            self.ensure_datapoints()
+            datapoints = self.datapoints
+            today = datetime.now().date()
+            dp_today = list(filter(lambda dp: dp.datetime.date() == today, datapoints))
+            if not dp_today:
+                return False
+            dp_yesterday = list(filter(lambda dp: dp not in dp_today, datapoints))
+            delta = dp_today[0].value - dp_yesterday[-1].value
+            return delta < 0
+        else:
+            return self.last_datapoint.is_updated_today
 
     def __repr__(self, *args, **kwargs):
         return f"{self.__class__.__name__}({self.slug})"
