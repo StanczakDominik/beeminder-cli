@@ -94,7 +94,7 @@ class Goal:
         if self.hhmmformat:
             return humanize.naturaldelta(timedelta(hours=delta))
         else:
-            return int(math.floor(delta))
+            return int(math.ceil(delta))
 
     @property
     def losedate(self):
@@ -133,7 +133,7 @@ class Goal:
 
     @property
     def formatted_losedate(self):
-        return self.losedate.strftime("%Y-%m-%d")
+        return humanize.naturalday(self.losedate)
 
     @property
     def summary(self):
