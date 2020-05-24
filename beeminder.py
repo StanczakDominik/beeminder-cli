@@ -178,6 +178,25 @@ class Goal:
     def default_description(self):
         return f"Updated from {self} at {datetime.now()}"
 
+    @property
+    def color(self):
+        now = datetime.now()
+        lane = self.dictionary["lane"]
+        yaw = self.dictionary["yaw"]
+        losedate = self._losedate
+        if lane * yaw >= -1:  #  on the road or on the good side of it (blue or green)
+            return "blue"
+        elif lane * yaw > 1:  # good side of the road (green dot)
+            return "green"
+        elif lane * yaw == 1:  # right lane (blue dot)
+            return "yellow"
+        elif lane * yaw == -1:  # wrong lane (orange dot)
+            return "orange"
+        elif lane * yaw <= -2:  # emergency day or derailed (red dot)
+            return "red"
+        else:
+            raise ValueError("Wrong color, this should not be possible")
+
     def update(self, value, description=None):
         if value is None:
             raise ValueError("You need to provide an update value!")
@@ -263,11 +282,14 @@ def beeminder(
             goals = goals[:n]
 
         if random:
-            click.echo(choice(goals).summary)
+            goal = choice(goals)
+            click.secho(goal.summary, fg=goal.color)
             return
 
         for goal in goals:
-            click.echo(goal.summary)
+            click.secho(goal.summary, fg=goal.color)
+            # TODO use click.echo_via_pager; have a generator handling this
+            # https://click.palletsprojects.com/en/7.x/utils/#pager-support
     else:
         pass
 
@@ -276,7 +298,7 @@ def beeminder(
 @click.argument("goal")
 def show(goal):
     goal = create_goal(slug=goal)
-    click.echo(goal.summary)
+    click.secho(goal.summary, fg=goal.color)
 
 
 @beeminder.command()
