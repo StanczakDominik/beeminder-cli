@@ -252,14 +252,22 @@ def get_all_goals():
 
 @click.group(invoke_without_command=True)
 @click.option("-m/-nm", "--manual/--no-manual", default=None)
-@click.option("-dl/-ndl", "--do-less/--no-do-less", default=None)
+@click.option("-dl/-ndl", "--do-less/--no-do-less", default=False)
 @click.option("-dt/-ndt", "--done-today/--not-done-today", default=None)
 @click.option("-d", "--days", type=int)
+@click.option("-s", "--since", type=int)
 @click.option("-n", type=int)
 @click.option("-r", "--random", is_flag=True)
 @click.pass_context
 def beeminder(
-    ctx, manual=None, do_less=None, done_today=None, days=None, n=None, random=False
+    ctx,
+    manual=None,
+    do_less=None,
+    done_today=None,
+    days=None,
+    since=None,
+    n=None,
+    random=False,
 ):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
@@ -270,6 +278,10 @@ def beeminder(
             goals = filter(lambda g: not g.is_do_less, goals)
         if done_today is not None:
             goals = filter(lambda g: g.is_updated_today == done_today, goals)
+        if since is not None:
+            horizon = datetime.now() - timedelta(days=since)
+            goals = filter(lambda g: g.last_datapoint.datetime < horizon, goals)
+
         goals = sorted(goals, key=lambda g: g.losedate)
 
         if days is not None:
