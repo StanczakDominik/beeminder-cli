@@ -21,7 +21,7 @@ this is an external goal; displays useful information
 >>> beeminder todoist edit
 """
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import click
 import os
 import functools
@@ -30,12 +30,18 @@ from random import choice
 import webbrowser
 import humanize
 import math
+import dateutil, dateutil.parser
+import todoist
+import numpy as np
+import pafy
 
 __version__ = "0.1.0"
 
 username = os.environ["BEEMINDER_USERNAME"]
 beeminder_auth_token = os.environ["BEEMINDER_TOKEN"]
 auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
+
+now = datetime.now()
 
 
 def increment_beeminder(desc, beeminder_goal, value=1):
@@ -59,7 +65,7 @@ class Datapoint:
 
     @property
     def is_updated_today(self):
-        return self.datetime.date() >= datetime.now().date()
+        return self.datetime.date() >= now.date()
 
 
 class Goal:
@@ -101,7 +107,7 @@ class Goal:
         if "backlog" in self.slug:
             self.ensure_datapoints()
             datapoints = self.datapoints
-            today = datetime.now().date()
+            today = now.date()
             i = 0
             dp_today = list(
                 filter(
@@ -123,9 +129,7 @@ class Goal:
                 return self._losedate
             timedel = dp_today[0].datetime - dp_yesterday[-1].datetime
             est_rate = -delta / (timedel.total_seconds() / 24 / 3600)
-            actual_time = datetime.now() + timedelta(
-                days=self.dictionary["delta"] / est_rate
-            )
+            actual_time = now + timedelta(days=self.dictionary["delta"] / est_rate)
             beeminder_time = self._losedate
             return min([actual_time, beeminder_time])
         else:
@@ -161,7 +165,7 @@ class Goal:
         if "backlog" in self.slug:
             self.ensure_datapoints()
             datapoints = self.datapoints
-            today = datetime.now().date()
+            today = now.date()
             dp_today = list(filter(lambda dp: dp.datetime.date() == today, datapoints))
             if not dp_today:
                 return False
@@ -176,11 +180,10 @@ class Goal:
 
     @property
     def default_description(self):
-        return f"Updated from {self} at {datetime.now()}"
+        return f"Updated from {self} at {now}"
 
     @property
     def color(self):
-        now = datetime.now()
         lane = self.dictionary["lane"]
         yaw = self.dictionary["yaw"]
         losedate = self._losedate
@@ -228,7 +231,132 @@ class TogglGoal(RemoteApiGoal):
         return not (self.last_datapoint.value == 0.0)
 
 
+class TodoistGoal(Goal):
+    key = os.environ["TODOIST_KEY"]
+    api = todoist.TodoistAPI(key)
+    api.sync()
+    now = datetime.now(timezone.utc)
+
+
+class TodoistBacklog(TodoistGoal):
+    @staticmethod
+    def _filter(task):
+        result = not task["checked"]
+        if task["due"] is not None:
+            return result and not task["due"]["is_recurring"]
+        else:
+            return result
+
+    def get_dates(self):
+        undone_tasks = self.api.items.all(self._filter)
+        dates = [dateutil.parser.parse(task["date_added"]) for task in undone_tasks]
+        return dates
+
+    def update(self, *args, **kwargs):
+        dates = self.get_dates()
+
+        total = -np.sum(np.array(dates) - self.now)
+        total_days = total.days + total.seconds / 3600 / 24
+
+        message = f"Incremented {self.slug} to {total_days} automatically from {len(dates)} items at {now}"
+        super().update(total_days, message)
+
+
+class TodoistNumberOfTasksGoal(TodoistGoal):
+    # def __init__(self, *args, **kwargs):   # maybe like this?
+    #     self._filter = kwargs.pop("filter")
+    #     super().__init(*args, **kwargs)
+
+    @staticmethod
+    def _filter(task):
+        raise NotImplementedError
+
+    def update(self, *args, **kwargs):
+        tasks = self.api.items.all(self._filter)
+        message = f"{self.slug}: {len(tasks)} tasks at {now}"
+        super().update(len(tasks), message)
+
+
+class TodoistUnprioritized(TodoistNumberOfTasksGoal):
+    @staticmethod
+    def _filter(task):
+        return not task["checked"] and task["priority"] == 1
+
+
+class TodoistHighPriority(TodoistNumberOfTasksGoal):
+    @staticmethod
+    def _filter(task):
+        return not task["checked"] and task["priority"] == 4
+
+
+class TodoistInbox(TodoistNumberOfTasksGoal):
+    @staticmethod
+    def _filter(task):
+        return not x["checked"] and x["project_id"] == 1264279437  # TODO configurable
+
+
+class YoutubeBacklogGoal(Goal):
+    def get_dates(self):
+        url = "https://www.youtube.com/playlist?list=PLvENAQ9GutPF3r2x5NPBipuqOXn3uUYbF"
+        playlist = pafy.get_playlist(url)
+        dates = [
+            dateutil.parser.parse(item["playlist_meta"]["added"])
+            for item in playlist["items"]
+        ]
+        return dates
+
+    def update(self, *args, **kwargs):
+        dates = self.get_dates()
+        total = -np.sum(np.array(dates) - now)
+        total_days = total.days + total.seconds / 3600 / 24
+
+        message = f"Incremented {self.slug} to {total_days} automatically from {len(dates)} items at {now}"
+        super().update(total_days, message)
+
+
+class PubsBacklogGoal(Goal):
+    def get_dates(self):
+        from pubs import repo, config
+        from pubs.query import get_paper_filter
+
+        conf_path = config.get_confpath(verify=False)  # will be checked on load
+        conf = config.load_conf(path=conf_path)
+        rp = repo.Repository(conf)
+        query = ["tag:TODO"]
+        papers = list(filter(get_paper_filter(query), rp.all_papers()))
+        query2 = ["tag:TodoAtWork"]
+        citekeys = [paper.citekey for paper in papers]
+
+        papers2 = list(filter(get_paper_filter(query2), rp.all_papers()))
+        for paper in papers2:
+            if paper.citekey not in citekeys:
+                papers.append(paper)
+        rp.close()
+        dates = [paper.added for paper in papers]
+        return dates
+
+    def update(self, *args, **kwargs):
+        dates = self.get_dates()
+        total = -np.sum(np.array(dates) - now)
+        total_days = total.days + total.seconds / 3600 / 24
+
+        message = f"Incremented {self.slug} to {total_days} automatically from {len(dates)} items at {now}"
+        super().update(total_days, message)
+
+
+custom_goals = {
+    "todoist-backlog": TodoistBacklog,
+    "todoist-unprioritized": TodoistUnprioritized,
+    "todoist-breakdown": TodoistHighPriority,
+    "todoist-inbox": TodoistInbox,
+    "youtube-backlog-upgrade": YoutubeBacklogGoal,
+    "papers-backlog": PubsBacklogGoal,
+}
+
+
 def create_goal(**goal):
+    if goal["slug"] in custom_goals:
+        return custom_goals[goal["slug"]](**goal)
     if goal.get("autodata") is None or goal.get("autodata") == "api":
         return Goal(**goal)
     elif goal["autodata"] == "toggl":
@@ -279,14 +407,14 @@ def beeminder(
         if done_today is not None:
             goals = filter(lambda g: g.is_updated_today == done_today, goals)
         if since is not None:
-            horizon = datetime.now() - timedelta(days=since)
+            horizon = now - timedelta(days=since)
             goals = filter(lambda g: g.last_datapoint.datetime < horizon, goals)
 
         goals = sorted(goals, key=lambda g: g.losedate)
 
         if days is not None:
             days = int(days)
-            horizon = datetime.now() + timedelta(days=days)
+            horizon = now + timedelta(days=days)
             goals = filter(lambda g: g.losedate <= horizon, goals)
 
         if n is not None:
