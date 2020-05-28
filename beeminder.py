@@ -216,7 +216,7 @@ class Goal:
 
     def update(self, value, description=None):
         if value is None:
-            raise ValueError("You need to provide an update value!")
+            value = 1
         if description is None:
             description = self.default_description
         click.echo(f"Updating {self} with {value} and description {description}")
