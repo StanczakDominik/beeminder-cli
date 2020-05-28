@@ -108,7 +108,7 @@ class Goal:
         self.dictionary = goal
         self.datapoints = []
 
-    @property
+    @cached_property
     def bump(self):
         delta = self.safebump - self.curval
         if self.hhmmformat:
@@ -116,7 +116,7 @@ class Goal:
         else:
             return int(math.ceil(delta))
 
-    @property
+    @cached_property
     def losedate(self):
         if "backlog" in self.slug:
             self.ensure_datapoints()
@@ -149,19 +149,19 @@ class Goal:
         else:
             return self._losedate
 
-    @property
+    @cached_property
     def formatted_losedate(self):
         return humanize.naturalday(self.losedate)
 
-    @property
+    @cached_property
     def summary(self):
         return f"{self.slug.upper():25}{self.bump:^15}{self.formatted_losedate:12}{self.last_datapoint.canonical}"
 
-    @property
+    @cached_property
     def is_do_less(self):
         return self.type == "drinker"  # and a fiend
 
-    @property
+    @cached_property
     def is_manual(self):
         return self.autodata is None
 
@@ -174,7 +174,7 @@ class Goal:
             datapoints = [Datapoint(**dp) for dp in r["datapoints"]]
             self.datapoints = sorted(datapoints, key=lambda dp: dp.datetime)
 
-    @property
+    @cached_property
     def is_updated_today(self):
         if "backlog" in self.slug:
             self.ensure_datapoints()
@@ -192,11 +192,11 @@ class Goal:
     def __repr__(self, *args, **kwargs):
         return f"{self.__class__.__name__}({self.slug})"
 
-    @property
+    @cached_property
     def default_description(self):
         return f"Updated from {self} at {now}"
 
-    @property
+    @cached_property
     def color(self):
         lane = self.dictionary["lane"]
         yaw = self.dictionary["yaw"]
@@ -240,7 +240,7 @@ class RemoteApiGoal(Goal):
 
 
 class TogglGoal(RemoteApiGoal):
-    @property
+    @cached_property
     def is_updated_today(self):
         return not (self.last_datapoint.value == 0.0)
 
