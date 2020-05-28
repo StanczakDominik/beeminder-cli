@@ -378,7 +378,21 @@ def get_all_goals():
     return all_goals
 
 
-@click.group(invoke_without_command=True)
+class AliasedGroup(click.Group):
+    # as per https://click.palletsprojects.com/en/7.x/advanced/
+    def get_command(self, ctx, cmd_name):
+        rv = click.Group.get_command(self, ctx, cmd_name)
+        if rv is not None:
+            return rv
+        matches = [x for x in self.list_commands(ctx) if x.startswith(cmd_name)]
+        if not matches:
+            return None
+        elif len(matches) == 1:
+            return click.Group.get_command(self, ctx, matches[0])
+        ctx.fail("Too many matches: %s" % ", ".join(sorted(matches)))
+
+
+@click.group(invoke_without_command=True, cls=AliasedGroup)
 @click.option("-m/-nm", "--manual/--no-manual", default=None)
 @click.option("-dl/-ndl", "--do-less/--no-do-less", default=False)
 @click.option("-dt/-ndt", "--done-today/--not-done-today", default=None)
@@ -458,7 +472,7 @@ def web(goal):
 
 
 @beeminder.command()
-def update_remotes():
+def fetch_remotes():
     def only_remotes(goal):
         return not (goal.autodata is None or goal.autodata == "api")
 
