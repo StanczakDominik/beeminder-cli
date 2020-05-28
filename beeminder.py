@@ -292,7 +292,9 @@ class TodoistHighPriority(TodoistNumberOfTasksGoal):
 class TodoistInbox(TodoistNumberOfTasksGoal):
     @staticmethod
     def _filter(task):
-        return not x["checked"] and x["project_id"] == 1264279437  # TODO configurable
+        return (
+            not task["checked"] and task["project_id"] == 1264279437
+        )  # TODO configurable
 
 
 class YoutubeBacklogGoal(Goal):
