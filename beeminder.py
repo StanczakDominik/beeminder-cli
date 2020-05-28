@@ -34,6 +34,8 @@ import dateutil, dateutil.parser
 import todoist
 import numpy as np
 import pafy
+from dataclasses import dataclass
+from functools import cached_property
 
 __version__ = "0.1.0"
 
@@ -54,16 +56,28 @@ def increment_beeminder(desc, beeminder_goal, value=1):
     return response
 
 
+@dataclass
 class Datapoint:
-    def __init__(self, **datapoint):
-        self.value = datapoint["value"]
-        self.comment = datapoint["comment"]
-        self.timestamp = datapoint["timestamp"]
-        self.canonical = datapoint["canonical"]
-        self.dictionary = datapoint
-        self.datetime = datetime.fromtimestamp(self.timestamp)
+    value: float
+    comment: int
+    timestamp: str
+    id: int
+    updated_at: str
+    requestid: int
+    canonical: str
+    origin: str
+    daystamp: str
+    fulltext: str
 
-    @property
+    @cached_property
+    def datetime(self):
+        return datetime.fromtimestamp(self.timestamp)
+
+    @cached_property
+    def updatedatetime(self):
+        return datetime.fromtimestamp(self.updated_at)
+
+    @cached_property
     def is_updated_today(self):
         return self.datetime.date() >= now.date()
 
