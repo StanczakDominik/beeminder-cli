@@ -117,36 +117,7 @@ class Goal:
 
     @cached_property
     def losedate(self):
-        if "backlog" in self.slug:
-            self.ensure_datapoints()
-            datapoints = self.datapoints
-            today = now.date()
-            i = 0
-            dp_today = list(
-                filter(
-                    lambda dp: dp.datetime.date() == today - timedelta(days=i),
-                    datapoints,
-                )
-            )
-            while not dp_today:
-                i += 1
-                dp_today = list(
-                    filter(
-                        lambda dp: dp.datetime.date() == today - timedelta(days=i),
-                        datapoints,
-                    )
-                )
-            dp_yesterday = list(filter(lambda dp: dp not in dp_today, datapoints))
-            delta = dp_today[0].value - dp_yesterday[-1].value
-            if delta < 0:
-                return self._losedate
-            timedel = dp_today[0].datetime - dp_yesterday[-1].datetime
-            est_rate = -delta / (timedel.total_seconds() / 24 / 3600)
-            actual_time = now + timedelta(days=self.dictionary["delta"] / est_rate)
-            beeminder_time = self._losedate
-            return min([actual_time, beeminder_time])
-        else:
-            return self._losedate
+        return self._losedate
 
     @cached_property
     def formatted_losedate(self):
