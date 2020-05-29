@@ -31,9 +31,7 @@ import webbrowser
 import humanize
 import math
 import dateutil, dateutil.parser
-import todoist
 import numpy as np
-import pafy
 from dataclasses import dataclass
 from functools import cached_property
 
@@ -247,6 +245,8 @@ class TogglGoal(RemoteApiGoal):
 
 
 class TodoistGoal(Goal):
+    import todoist
+
     key = os.environ["TODOIST_KEY"]
     api = todoist.TodoistAPI(key)
     api.sync()
@@ -314,6 +314,8 @@ class TodoistInbox(TodoistNumberOfTasksGoal):
 
 class YoutubeBacklogGoal(Goal):
     def get_dates(self):
+        import pafy
+
         url = "https://www.youtube.com/playlist?list=PLvENAQ9GutPF3r2x5NPBipuqOXn3uUYbF"
         playlist = pafy.get_playlist(url)
         dates = [
