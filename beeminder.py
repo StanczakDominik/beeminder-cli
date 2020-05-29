@@ -432,12 +432,13 @@ def beeminder(
         if random:
             goal = choice(goals)
             click.secho(goal.summary, fg=goal.color)
-            return
+        else:
 
-        for goal in goals:
-            click.secho(goal.summary, fg=goal.color)
-            # TODO use click.echo_via_pager; have a generator handling this
-            # https://click.palletsprojects.com/en/7.x/utils/#pager-support
+            def _display():
+                for goal in goals:
+                    yield click.style(goal.summary, fg=goal.color) + "\n"
+
+            click.echo_via_pager(_display())
     else:
         pass
 
