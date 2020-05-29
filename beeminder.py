@@ -106,6 +106,7 @@ class Goal:
         else:
             self.last_datapoint = None
         self.dictionary = goal
+        self.won = goal.get("won")
         self.datapoints = []
 
     @cached_property
@@ -414,6 +415,7 @@ class AliasedGroup(click.Group):
 @click.option("-dt/-ndt", "--done-today/--not-done-today", default=None)
 @click.option("-d", "--days", type=int)
 @click.option("-s", "--since", type=int)
+@click.option("-f/-nf", "--finished/--not-finished", default=False)
 @click.option("-n", type=int)
 @click.option("-r", "--random", is_flag=True)
 @click.pass_context
@@ -424,12 +426,15 @@ def beeminder(
     done_today=None,
     days=None,
     since=None,
+    finished=False,
     n=None,
     random=False,
 ):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
         goals = get_all_goals()
+        if finished is not None:
+            goals = filter(lambda g: g.won == finished, goals)
         if manual is not None:
             goals = filter(lambda g: g.is_manual, goals)
         if do_less is not None:
