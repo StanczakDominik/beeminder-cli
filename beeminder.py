@@ -146,18 +146,7 @@ class Goal:
 
     @cached_property
     def is_updated_today(self):
-        if "backlog" in self.slug:
-            self.ensure_datapoints()
-            datapoints = self.datapoints
-            today = now.date()
-            dp_today = list(filter(lambda dp: dp.datetime.date() == today, datapoints))
-            if not dp_today:
-                return False
-            dp_yesterday = list(filter(lambda dp: dp not in dp_today, datapoints))
-            delta = dp_today[0].value - dp_yesterday[-1].value
-            return delta < 0
-        else:
-            return self.last_datapoint.is_updated_today
+        return self.last_datapoint.is_updated_today
 
     def __repr__(self, *args, **kwargs):
         return f"{self.__class__.__name__}({self.slug})"
