@@ -10,4 +10,5 @@ setup(
         [console_scripts]
         beeminder=beeminder:beeminder
     """,
+    python_requires=">=3.7",
 )
