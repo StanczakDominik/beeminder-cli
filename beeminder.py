@@ -33,7 +33,6 @@ import math
 import dateutil, dateutil.parser
 import numpy as np
 from dataclasses import dataclass
-from functools import cached_property
 
 __version__ = "0.1.0"
 
@@ -67,15 +66,15 @@ class Datapoint:
     daystamp: str
     fulltext: str
 
-    @cached_property
+    @property
     def datetime(self):
         return datetime.fromtimestamp(self.timestamp)
 
-    @cached_property
+    @property
     def updatedatetime(self):
         return datetime.fromtimestamp(self.updated_at)
 
-    @cached_property
+    @property
     def is_updated_today(self):
         return self.datetime.date() >= now.date()
 
@@ -107,7 +106,7 @@ class Goal:
         self.won = goal.get("won")
         self.datapoints = []
 
-    @cached_property
+    @property
     def bump(self):
         delta = self.safebump - self.curval
         if self.hhmmformat:
@@ -115,23 +114,23 @@ class Goal:
         else:
             return int(math.ceil(delta))
 
-    @cached_property
+    @property
     def losedate(self):
         return self._losedate
 
-    @cached_property
+    @property
     def formatted_losedate(self):
         return humanize.naturalday(self.losedate)
 
-    @cached_property
+    @property
     def summary(self):
         return f"{self.slug.upper():25}{self.bump:^15}{self.formatted_losedate:12}{self.last_datapoint.canonical}"
 
-    @cached_property
+    @property
     def is_do_less(self):
         return self.type == "drinker"  # and a fiend
 
-    @cached_property
+    @property
     def is_manual(self):
         return self.autodata is None
 
@@ -144,18 +143,18 @@ class Goal:
             datapoints = [Datapoint(**dp) for dp in r["datapoints"]]
             self.datapoints = sorted(datapoints, key=lambda dp: dp.datetime)
 
-    @cached_property
+    @property
     def is_updated_today(self):
         return self.last_datapoint.is_updated_today
 
     def __repr__(self, *args, **kwargs):
         return f"{self.__class__.__name__}({self.slug})"
 
-    @cached_property
+    @property
     def default_description(self):
         return f"Updated from {self} at {now}"
 
-    @cached_property
+    @property
     def color(self):
         lane = self.dictionary["lane"]
         yaw = self.dictionary["yaw"]
@@ -199,7 +198,7 @@ class RemoteApiGoal(Goal):
 
 
 class TogglGoal(RemoteApiGoal):
-    @cached_property
+    @property
     def is_updated_today(self):
         return not (self.last_datapoint.value == 0.0)
 
