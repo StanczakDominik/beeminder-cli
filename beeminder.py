@@ -379,6 +379,7 @@ class AliasedGroup(click.Group):
 @click.option("-f/-nf", "--finished/--not-finished", default=False)
 @click.option("-n", type=int)
 @click.option("-r", "--random", is_flag=True)
+@click.option("-w", "--watch", is_flag=True)
 @click.pass_context
 def beeminder(
     ctx,
@@ -390,42 +391,50 @@ def beeminder(
     finished=False,
     n=None,
     random=False,
+    watch=False,
 ):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
-        goals = get_all_goals()
-        if finished is not None:
-            goals = filter(lambda g: g.won == finished, goals)
-        if manual is not None:
-            goals = filter(lambda g: g.is_manual, goals)
-        if do_less is not None:
-            goals = filter(lambda g: not g.is_do_less, goals)
-        if done_today is not None:
-            goals = filter(lambda g: g.is_updated_today == done_today, goals)
-        if since is not None:
-            horizon = now - timedelta(days=since)
-            goals = filter(lambda g: g.last_datapoint.datetime < horizon, goals)
 
-        goals = sorted(goals, key=lambda g: g.losedate)
+        def filter_goals():
+            goals = get_all_goals()
+            if finished is not None:
+                goals = filter(lambda g: g.won == finished, goals)
+            if manual is not None:
+                goals = filter(lambda g: g.is_manual, goals)
+            if do_less is not None:
+                goals = filter(lambda g: not g.is_do_less, goals)
+            if done_today is not None:
+                goals = filter(lambda g: g.is_updated_today == done_today, goals)
+            if since is not None:
+                horizon = now - timedelta(days=since)
+                goals = filter(lambda g: g.last_datapoint.datetime < horizon, goals)
 
-        if days is not None:
-            days = int(days)
-            horizon = now + timedelta(days=days)
-            goals = filter(lambda g: g.losedate <= horizon, goals)
+            goals = sorted(goals, key=lambda g: g.losedate)
 
-        if n is not None:
-            n = int(n)
-            goals = goals[:n]
+            if days is not None:
+                horizon = now + timedelta(days=int(days))
+                goals = filter(lambda g: g.losedate <= horizon, goals)
+
+            if n is not None:
+                goals = goals[: int(n)]
+            return goals
+
+        goals = filter_goals()
+
+        def _display():
+            for goal in goals:
+                yield click.style(goal.summary, fg=goal.color) + "\n"
 
         if random:
             goal = choice(goals)
             click.secho(goal.summary, fg=goal.color)
+        elif watch:
+            while True:
+                click.echo_via_pager(_display())
+                click.confirm("Continue?", abort=True)
+                goals = filter_goals()
         else:
-
-            def _display():
-                for goal in goals:
-                    yield click.style(goal.summary, fg=goal.color) + "\n"
-
             click.echo_via_pager(_display())
     else:
         pass
