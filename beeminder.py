@@ -32,6 +32,7 @@ import humanize
 import math
 import dateutil, dateutil.parser
 import numpy as np
+import itertools
 from dataclasses import dataclass
 
 __version__ = "0.1.0"
@@ -211,15 +212,31 @@ class TodoistGoal(Goal):
     api.sync()
     now = datetime.now(timezone.utc)
 
+    children = itertools.groupby(api.items.all(), lambda item: item["parent_id"])
+
+    id_task = {task["id"]: task for task in api.items.all()}
+
+    for parent_id, these_children in children:
+        if parent_id is not None:
+            parent = id_task[parent_id]
+            these_children = list(these_children)
+            parent["children_ids"] = [child["id"] for child in these_children]
+
 
 class TodoistBacklog(TodoistGoal):
     @staticmethod
     def _filter(task):
-        result = not task["checked"]
+        if task["checked"]:
+            return False
         if task["due"] is not None:
-            return result and not task["due"]["is_recurring"]
+            if task["due"]["is_recurring"]:
+                return False
+        if 2153366150 in task["labels"]:
+            return False
+        if task["parent_id"] is not None:
+            return False
         else:
-            return result
+            return True
 
     def get_dates(self):
         undone_tasks = self.api.items.all(self._filter)
@@ -260,7 +277,11 @@ class TodoistUnprioritized(TodoistNumberOfTasksGoal):
 class TodoistHighPriority(TodoistNumberOfTasksGoal):
     @staticmethod
     def _filter(task):
-        return not task["checked"] and task["priority"] == 4
+        return (
+            not task["checked"]
+            and task["priority"] == 4
+            and (not task["children_ids"] if "children_ids" in task else True)
+        )
 
 
 class TodoistInbox(TodoistNumberOfTasksGoal):
