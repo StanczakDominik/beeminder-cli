@@ -444,8 +444,8 @@ def beeminder(
         goals = filter_goals()
 
         def _display():
-            for goal in goals:
-                yield click.style(goal.summary, fg=goal.color) + "\n"
+            for i, goal in enumerate(goals, 1):
+                yield click.style(f"{i:2}. {goal.summary}", fg=goal.color) + "\n"
 
         if random:
             goal = choice(goals)
