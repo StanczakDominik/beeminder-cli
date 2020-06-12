@@ -451,8 +451,11 @@ class AllGoals:
         self.goals = []
         self._read_cache()
         if not self.goals:
-            self.goals = get_all_goals(datapoints=True)
-            self._write_cache()
+            self.pull_data()
+
+    def pull_data(self):
+        self.goals = get_all_goals(datapoints=True)
+        self._write_cache()
 
     def _read_cache(self):
         if self.cache is None:
@@ -461,7 +464,7 @@ class AllGoals:
             file = self.cache / f"{beeminder_auth_token}.json"
 
             mtime = datetime.fromtimestamp(file.stat().st_mtime)
-            if mtime + self.limit_minutes() < datetime.now():
+            if mtime + self.limit_minutes < datetime.now():
                 return
 
             with open(file) as f:
@@ -482,6 +485,9 @@ class AllGoals:
         else:
             self.goals = get_all_goals()
             self._write_cache()
+
+    def pick_goal(self, **goal):
+        return [g for g in self.goals if g.slug == goal["slug"]][0]
 
     def filter_goals(
         self,
@@ -614,7 +620,7 @@ def beeminder(
 @beeminder.command()
 @click.argument("goal")
 def show(goal):
-    goal = pick_goal(slug=goal)
+    goal = all_goals.pick_goal(slug=goal)
     click.secho(goal.summary, fg=goal.color)
 
 
@@ -623,14 +629,19 @@ def show(goal):
 @click.argument("update_value", required=False)
 @click.argument("description", type=str, required=False)
 def update(goal, update_value, description=None):
-    goal = pick_goal(slug=goal)
+    goal = all_goals.pick_goal(slug=goal)
     goal.update(update_value, description)
+
+
+@beeminder.command()
+def pull():
+    all_goals.pull_data()
 
 
 @beeminder.command()
 @click.argument("goal", type=str)
 def web(goal):
-    goal = pick_goal(slug=goal)
+    goal = all_goals.pick_goal(slug=goal)
     goal.show_web()
 
 
