@@ -22,6 +22,7 @@ this is an external goal; displays useful information
 """
 import requests
 from datetime import datetime, timedelta, timezone
+import json
 import click
 import os
 import functools
@@ -35,6 +36,7 @@ import numpy as np
 import itertools
 from dataclasses import dataclass
 import tqdm
+import pathlib
 
 __version__ = "0.1.0"
 
@@ -161,7 +163,7 @@ class Goal:
 
     @property
     def summary(self):
-        return f"{'✔️' if self.is_updated_today else '❌'} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {self.rate}/{self.runits}     {self.last_datapoint.canonical}"
+        return f"{'✔️' if self.is_updated_today else '❌'} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {round(self.rate, 1)}/{self.runits}     {self.last_datapoint.canonical}"
 
     @property
     def is_do_less(self):
@@ -177,6 +179,7 @@ class Goal:
             params = auth.copy()
             params["datapoints"] = "true"
             r = requests.get(url, params=params).json()
+            self.dictionary = r
             datapoints = [Datapoint(**dp) for dp in r["datapoints"]]
             self.datapoints = sorted(datapoints, key=lambda dp: dp.datetime)
 
@@ -403,22 +406,113 @@ def create_goal(**goal):
 
 
 def pull_goals():
+    click.echo("Pulling data...")
     url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
     r = requests.get(url, params=auth).json()
     return r
 
 
 def get_all_goals(r=None, datapoints=False):
-    if datapoints:
-        r = tqdm.tqdm(r)
     if r is None:
         r = pull_goals()
+
     goals = [create_goal(**goal) for goal in r]
     if datapoints:
-        for goal in goals:
+        for goal in tqdm.tqdm(goals):
             goal.ensure_datapoints()
 
     return goals
+
+
+class CustomEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Goal):
+            return obj.dictionary
+
+        return json.JSONEncoder.default(self, obj)
+
+
+class AllGoals:
+    def __init__(self, cache="~/.beeminder-cli/", limit_minutes=30):
+        self.limit_minutes = timedelta(minutes=30)
+        if cache is None:
+            self.cache = None
+        else:
+            self.cache = pathlib.Path(cache).expanduser()
+            os.makedirs(self.cache, exist_ok=True)
+        self.goals = []
+        self._read_cache()
+        if not self.goals:
+            self.goals = get_all_goals(datapoints=True)
+            self._write_cache()
+
+    def _read_cache(self):
+        if self.cache is None:
+            return
+        try:
+            file = self.cache / f"{beeminder_auth_token}.json"
+
+            mtime = datetime.fromtimestamp(file.stat().st_mtime)
+            if mtime + self.limit_minutes() < datetime.now():
+                return
+
+            with open(file) as f:
+                state = f.read()
+            self.goals = get_all_goals(json.loads(state))
+        except Exception:
+            return
+
+    def _write_cache(self):
+        if self.cache is None:
+            return
+        with open(self.cache / f"{beeminder_auth_token}.json", "w") as f:
+            json.dump(self.goals, f, indent=2, sort_keys=True, cls=CustomEncoder)
+
+    def __call__(self, *, force=False):
+        if not force:
+            self.read_cache()
+        else:
+            self.goals = get_all_goals()
+            self._write_cache()
+
+    def filter_goals(
+        self,
+        manual: bool = None,
+        finished: bool = None,
+        do_less: bool = None,
+        done_today: bool = None,
+        over_rate: bool = None,
+        n: int = None,
+        since: int = None,
+        days: int = None,
+    ):
+        goals = sorted(self.goals, key=lambda g: g.losedate)
+
+        if finished is not None:
+            goals = filter(lambda g: g.won == finished, goals)
+        if manual is not None:
+            goals = filter(lambda g: g.is_manual == manual, goals)
+        if do_less is not None:
+            goals = filter(lambda g: not g.is_do_less, goals)
+        if done_today is not None:
+            goals = filter(lambda g: g.is_updated_today == done_today, goals)
+        if over_rate is not None:
+            click.echo(f"Filtering by fulfilled rate.")
+            goals = filter(lambda g: g.fulfills_rate() == over_rate, goals)
+
+        if since is not None:
+            horizon = now - timedelta(days=since)
+            goals = filter(lambda g: g.last_datapoint.datetime < horizon, goals)
+        if days is not None:
+            horizon = now + timedelta(days=days)
+            goals = filter(lambda g: g.losedate <= horizon, goals)
+        if n is not None:
+            goals = goals[: int(n)]
+
+        return goals
+
+
+all_goals = AllGoals()
 
 
 class AliasedGroup(click.Group):
@@ -456,41 +550,24 @@ def beeminder(
     since=None,
     finished=False,
     n=None,
+    over_rate=None,
+    # commands
     random=False,
     watch=False,
-    over_rate=None,
 ):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
 
-        def filter_goals(since=None, days=None):
-            goals = get_all_goals()
-            if finished is not None:
-                goals = filter(lambda g: g.won == finished, goals)
-            if manual is not None:
-                goals = filter(lambda g: g.is_manual, goals)
-            if do_less is not None:
-                goals = filter(lambda g: not g.is_do_less, goals)
-            if done_today is not None:
-                goals = filter(lambda g: g.is_updated_today == done_today, goals)
-            if since is not None:
-                horizon = now - timedelta(days=since)
-                goals = filter(lambda g: g.last_datapoint.datetime < horizon, goals)
-            if over_rate is not None:
-                click.echo(f"Filtering by fulfilled rate.")
-                goals = filter(lambda g: g.fulfills_rate(), goals)
-
-            goals = sorted(goals, key=lambda g: g.losedate)
-
-            if days is not None:
-                horizon = now + timedelta(days=int(days))
-                goals = filter(lambda g: g.losedate <= horizon, goals)
-
-            if n is not None:
-                goals = goals[: int(n)]
-            return goals
-
-        goals = filter_goals(days=days, since=since)
+        goals = all_goals.filter_goals(
+            manual=manual,
+            do_less=do_less,
+            done_today=done_today,
+            days=days,
+            since=since,
+            finished=finished,
+            n=n,
+            over_rate=over_rate,
+        )
 
         def _display():
             for goal in goals:
@@ -508,7 +585,16 @@ def beeminder(
                 elif days is not None:
                     days += 1
                     click.echo(f"Incrementing days to {days}")
-                goals = filter_goals(since=since, days=days)
+                    goals = all_goals.filter_goals(
+                        manual=manual,
+                        do_less=do_less,
+                        done_today=done_today,
+                        days=days,
+                        since=since,
+                        finished=finished,
+                        n=n,
+                        over_rate=over_rate,
+                    )
                 click.echo_via_pager(_display())
                 click.confirm("Continue?", default=True, abort=True)
         else:
@@ -556,42 +642,6 @@ def debug():
     goals = get_all_goals(datapoints=False)
     goal = goals[0]
     breakpoint()
-
-
-class AllGoals:
-    def __init__(self, cache="~/.beeminder-cli/"):
-        if cache is None:
-            self.cache = None
-        else:
-            self.cache = pathlib.Path(cache)
-            os.makedirs(self.cache, exist_ok=True)
-        self.goals = []
-
-    def _read_cache(self):
-        if self.cache is None:
-            return
-        try:
-            with open(self.cache / f"{beeminder_auth_token}.json") as f:
-                state = f.read()
-            self.goals = get_all_goals(json.loads(state))
-        except Exception:
-            return
-
-    def _write_cache(cache):
-        if cache is None:
-            return
-        with open(cache / f"{beeminder_auth_token}.json") as f:
-            json.dump(f, self.goals, indent=2, sort_keys=True)
-
-    def __call__(self, *, force=False):
-        if not force:
-            self.read_cache()
-        else:
-            self.goals = get_all_goals()
-            self._write_cache()
-
-
-AllGoals = AllGoals()
 
 
 if __name__ == "__main__":
