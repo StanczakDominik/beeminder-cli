@@ -34,6 +34,7 @@ import dateutil, dateutil.parser
 import numpy as np
 import itertools
 from dataclasses import dataclass
+import tqdm
 
 __version__ = "0.1.0"
 
@@ -366,13 +367,17 @@ def create_goal(**goal):
         raise ValueError(f"What autodata is {goal['autodata']}?")
 
 
-def get_all_goals():
+def get_all_goals(datapoints=False):
     all_goals = []
     url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
     r = requests.get(url, params=auth).json()
 
+    if datapoints:
+        r = tqdm.tqdm(r)
     for goal in r:
         goal = create_goal(**goal)
+        if datapoints:
+            goal.ensure_datapoints()
         all_goals.append(goal)
     return all_goals
 
@@ -497,6 +502,8 @@ def fetch_remotes():
 
 @beeminder.command()
 def debug():
+    goals = get_all_goals(datapoints=True)
+    goal = goals[0]
     breakpoint()
 
 
