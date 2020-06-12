@@ -402,24 +402,23 @@ def create_goal(**goal):
         raise ValueError(f"What autodata is {goal['autodata']}?")
 
 
-def get_all_goals(datapoints=False):
-    all_goals = []
+def pull_goals():
     url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
     r = requests.get(url, params=auth).json()
+    return r
 
+
+def get_all_goals(r=None, datapoints=False):
     if datapoints:
         r = tqdm.tqdm(r)
-    for goal in r:
-        goal = create_goal(**goal)
-        if datapoints:
+    if r is None:
+        r = pull_goals()
+    goals = [create_goal(**goal) for goal in r]
+    if datapoints:
+        for goal in goals:
             goal.ensure_datapoints()
-        all_goals.append(goal)
-    return all_goals
 
-
-def pick_goal(**goal):
-    all_goals = get_all_goals()
-    return [g for g in all_goals if g.slug == goal["slug"]][0]
+    return goals
 
 
 class AliasedGroup(click.Group):
@@ -546,7 +545,7 @@ def fetch_remotes():
     def only_remotes(goal):
         return not (goal.autodata is None or goal.autodata == "api")
 
-    all_goals = get_all_goals()
+    all_goals = AllGoals()
     goals = filter(only_remotes, all_goals)
     for goal in goals:
         goal.update()
@@ -557,6 +556,42 @@ def debug():
     goals = get_all_goals(datapoints=False)
     goal = goals[0]
     breakpoint()
+
+
+class AllGoals:
+    def __init__(self, cache="~/.beeminder-cli/"):
+        if cache is None:
+            self.cache = None
+        else:
+            self.cache = pathlib.Path(cache)
+            os.makedirs(self.cache, exist_ok=True)
+        self.goals = []
+
+    def _read_cache(self):
+        if self.cache is None:
+            return
+        try:
+            with open(self.cache / f"{beeminder_auth_token}.json") as f:
+                state = f.read()
+            self.goals = get_all_goals(json.loads(state))
+        except Exception:
+            return
+
+    def _write_cache(cache):
+        if cache is None:
+            return
+        with open(cache / f"{beeminder_auth_token}.json") as f:
+            json.dump(f, self.goals, indent=2, sort_keys=True)
+
+    def __call__(self, *, force=False):
+        if not force:
+            self.read_cache()
+        else:
+            self.goals = get_all_goals()
+            self._write_cache()
+
+
+AllGoals = AllGoals()
 
 
 if __name__ == "__main__":
