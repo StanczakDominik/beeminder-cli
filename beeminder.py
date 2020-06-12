@@ -173,15 +173,23 @@ class Goal:
     def is_manual(self):
         return self.autodata is None
 
+    def get_full_data(self):
+        url = (
+            f"https://www.beeminder.com/api/v1/users/{username}/goals/{self.slug}.json"
+        )
+        params = auth.copy()
+        params["datapoints"] = "true"
+        r = requests.get(url, params=params).json()
+        self.dictionary = r
+        datapoints = [Datapoint(**dp) for dp in self.datapoints]
+        self.datapoints = sorted(datapoints, key=lambda dp: dp.datetime)
+
     def ensure_datapoints(self):
         if not self.datapoints:
-            url = f"https://www.beeminder.com/api/v1/users/{username}/goals/{self.slug}.json"
-            params = auth.copy()
-            params["datapoints"] = "true"
-            r = requests.get(url, params=params).json()
-            self.dictionary = r
-            datapoints = [Datapoint(**dp) for dp in r["datapoints"]]
-            self.datapoints = sorted(datapoints, key=lambda dp: dp.datetime)
+            if "datapoints" in self.dictionary:
+                datapoints = self.datapoints = self.dictionary["datapoints"]
+            else:
+                self.get_full_data()
 
     @property
     def is_updated_today(self):
