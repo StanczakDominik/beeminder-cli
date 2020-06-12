@@ -100,13 +100,14 @@ class Goal:
         self.integery = goal.get("integery")
         self.safebump = goal.get("safebump")
         self.curval = goal.get("curval")
+        self.runits = goal.get("runits")
+        self.datapoints = []  # maybe just self.last_datapoint?
         if "last_datapoint" in goal:
             self.last_datapoint = Datapoint(**goal["last_datapoint"])
         else:
             self.last_datapoint = None
         self.dictionary = goal
         self.won = goal.get("won")
-        self.datapoints = []
 
     @property
     def bump(self):
@@ -115,6 +116,40 @@ class Goal:
             return humanize.naturaldelta(timedelta(hours=delta))
         else:
             return int(math.ceil(delta))
+
+    @property
+    def rate(self):
+        if self.dictionary["rate"] is None:
+            return self.dictionary["mathishard"][2]
+        else:
+            return self.dictionary["rate"]
+
+    @property
+    def rate_timedelta(self):
+        rate_dict = dict(y=365, m=30, w=7, d=1, h=1 / 24)
+        return timedelta(days=rate_dict[self.runits])
+
+    def fulfills_rate(self):
+        horizon = datetime.now() - self.rate_timedelta
+        if self.last_datapoint is None:
+            return False
+
+        if horizon < self.last_datapoint.datetime:
+            if self.rate <= self.last_datapoint.value:
+                return True
+            else:
+                return self.datapoints_fulfill_rate()
+        else:
+            return False
+
+    def datapoints_fulfill_rate(self):
+        # TODO refactor these two together
+        click.echo(f"Using nuclear option for {self}")
+        self.ensure_datapoints()
+        horizon = datetime.now() - self.rate_timedelta
+        relevant_datapoints = filter(lambda dp: horizon < dp.datetime, self.datapoints)
+        total_values = sum(dp.value for dp in relevant_datapoints)
+        return self.rate <= total_values
 
     @property
     def losedate(self):
@@ -126,7 +161,7 @@ class Goal:
 
     @property
     def summary(self):
-        return f"{self.slug.upper():25}{self.bump:^15}{self.formatted_losedate:12}{self.last_datapoint.canonical}"
+        return f"{'✔️' if self.is_updated_today else '❌'} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {self.rate}/{self.runits}     {self.last_datapoint.canonical}"
 
     @property
     def is_do_less(self):
@@ -382,6 +417,11 @@ def get_all_goals(datapoints=False):
     return all_goals
 
 
+def pick_goal(**goal):
+    all_goals = get_all_goals()
+    return [g for g in all_goals if g.slug == goal["slug"]][0]
+
+
 class AliasedGroup(click.Group):
     # as per https://click.palletsprojects.com/en/7.x/advanced/
     def get_command(self, ctx, cmd_name):
@@ -400,6 +440,7 @@ class AliasedGroup(click.Group):
 @click.option("-m/-nm", "--manual/--no-manual", default=None)
 @click.option("-dl/-ndl", "--do-less/--no-do-less", default=False)
 @click.option("-dt/-ndt", "--done-today/--not-done-today", default=None)
+@click.option("-o", "--over-rate", default=None, is_flag=True)
 @click.option("-d", "--days", type=int)
 @click.option("-s", "--since", type=int)
 @click.option("-f/-nf", "--finished/--not-finished", default=False)
@@ -418,11 +459,12 @@ def beeminder(
     n=None,
     random=False,
     watch=False,
+    over_rate=None,
 ):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
 
-        def filter_goals():
+        def filter_goals(since=None, days=None):
             goals = get_all_goals()
             if finished is not None:
                 goals = filter(lambda g: g.won == finished, goals)
@@ -435,6 +477,9 @@ def beeminder(
             if since is not None:
                 horizon = now - timedelta(days=since)
                 goals = filter(lambda g: g.last_datapoint.datetime < horizon, goals)
+            if over_rate is not None:
+                click.echo(f"Filtering by fulfilled rate.")
+                goals = filter(lambda g: g.fulfills_rate(), goals)
 
             goals = sorted(goals, key=lambda g: g.losedate)
 
@@ -446,20 +491,27 @@ def beeminder(
                 goals = goals[: int(n)]
             return goals
 
-        goals = filter_goals()
+        goals = filter_goals(days=days, since=since)
 
         def _display():
-            for i, goal in enumerate(goals, 1):
-                yield click.style(f"{i:2}. {goal.summary}", fg=goal.color) + "\n"
+            for goal in goals:
+                yield click.style(goal.summary, fg=goal.color) + "\n"
 
         if random:
             goal = choice(goals)
             click.secho(goal.summary, fg=goal.color)
         elif watch:
+            click.echo_via_pager(_display())
             while True:
+                if since is not None:
+                    since += 1
+                    click.echo(f"Incrementing since to {since}")
+                elif days is not None:
+                    days += 1
+                    click.echo(f"Incrementing days to {days}")
+                goals = filter_goals(since=since, days=days)
                 click.echo_via_pager(_display())
-                click.confirm("Continue?", abort=True)
-                goals = filter_goals()
+                click.confirm("Continue?", default=True, abort=True)
         else:
             click.echo_via_pager(_display())
     else:
@@ -469,7 +521,7 @@ def beeminder(
 @beeminder.command()
 @click.argument("goal")
 def show(goal):
-    goal = create_goal(slug=goal)
+    goal = pick_goal(slug=goal)
     click.secho(goal.summary, fg=goal.color)
 
 
@@ -478,14 +530,14 @@ def show(goal):
 @click.argument("update_value", required=False)
 @click.argument("description", type=str, required=False)
 def update(goal, update_value, description=None):
-    goal = create_goal(slug=goal)
+    goal = pick_goal(slug=goal)
     goal.update(update_value, description)
 
 
 @beeminder.command()
 @click.argument("goal", type=str)
 def web(goal):
-    goal = create_goal(slug=goal)
+    goal = pick_goal(slug=goal)
     goal.show_web()
 
 
@@ -502,7 +554,7 @@ def fetch_remotes():
 
 @beeminder.command()
 def debug():
-    goals = get_all_goals(datapoints=True)
+    goals = get_all_goals(datapoints=False)
     goal = goals[0]
     breakpoint()
 
