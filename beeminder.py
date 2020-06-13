@@ -226,7 +226,10 @@ class Goal:
         if description is None:
             description = self.default_description
         click.echo(f"Updating {self} with {value} and description {description}")
-        return increment_beeminder(description, self.slug, value)
+        return_value = increment_beeminder(description, self.slug, value)
+        self.get_full_data()
+        all_goals._write_cache()
+        return return_value
 
     def show_web(self):
         goal_url = f"https://www.beeminder.com/{username}/{self.slug}"
@@ -650,8 +653,7 @@ def fetch_remotes():
     def only_remotes(goal):
         return not (goal.autodata is None or goal.autodata == "api")
 
-    all_goals = AllGoals()
-    goals = filter(only_remotes, all_goals)
+    goals = filter(only_remotes, all_goals.goals)
     for goal in goals:
         goal.update()
 
