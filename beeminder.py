@@ -164,7 +164,7 @@ class Goal:
 
     @property
     def summary(self):
-        return f"{'✔️' if self.is_updated_today else '❌'} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {round(self.rate, 1)}/{self.runits}     {self.last_datapoint.canonical}"
+        return f"{'x' if self.is_updated_today else 'o'} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {round(self.rate, 1)}/{self.runits}     {self.last_datapoint.canonical}"
 
     @property
     def is_do_less(self):
