@@ -110,6 +110,7 @@ class Goal:
             self.last_datapoint = None
         self.dictionary = goal
         self.won = goal.get("won")
+        # self.updated_at = datetime.fromtimestamp(goal.get("updated_at"))
 
     @property
     def bump(self):
@@ -245,6 +246,8 @@ class RemoteApiGoal(Goal):
             )
         url = f"https://www.beeminder.com/api/v1/users/{username}/goals/{self.slug}/refresh_graph.json"
         r = requests.get(url, params=auth)
+        self.get_full_data()
+        all_goals._write_cache()
         click.echo(f"Updated {self.slug}.")
 
 
@@ -602,6 +605,7 @@ def beeminder(
                 elif days is not None:
                     days += 1
                     click.echo(f"Incrementing days to {days}")
+                    all_goals._read_cache()
                     goals = all_goals.filter_goals(
                         manual=manual,
                         do_less=do_less,
@@ -660,7 +664,7 @@ def fetch_remotes():
 
 @beeminder.command()
 def debug():
-    goals = get_all_goals(datapoints=False)
+    goals = all_goals.goals
     goal = goals[0]
     breakpoint()
 
