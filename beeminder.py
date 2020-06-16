@@ -37,6 +37,7 @@ import itertools
 from dataclasses import dataclass
 import tqdm
 import pathlib
+import concurrent.futures
 
 __version__ = "0.1.0"
 
@@ -103,7 +104,6 @@ class Goal:
         self.safebump = goal.get("safebump")
         self.curval = goal.get("curval")
         self.runits = goal.get("runits")
-        self.datapoints = []  # maybe just self.last_datapoint?
         if "last_datapoint" in goal:
             self.last_datapoint = Datapoint(**goal["last_datapoint"])
         else:
@@ -182,15 +182,16 @@ class Goal:
         params["datapoints"] = "true"
         r = requests.get(url, params=params).json()
         self.dictionary = r
-        datapoints = [Datapoint(**dp) for dp in self.datapoints]
-        self.datapoints = sorted(datapoints, key=lambda dp: dp.datetime)
+        return r
+
+    @property
+    def datapoints(self):
+        datapoints = [Datapoint(**dp) for dp in self.dictionary["datapoints"]]
+        return sorted(datapoints, key=lambda dp: dp.datetime)
 
     def ensure_datapoints(self):
-        if not self.datapoints:
-            if "datapoints" in self.dictionary:
-                datapoints = self.datapoints = self.dictionary["datapoints"]
-            else:
-                self.get_full_data()
+        if not self.dictionary["datapoints"]:
+            self.get_full_data()
 
     @property
     def is_updated_today(self):
@@ -432,9 +433,11 @@ def get_all_goals(r=None, datapoints=False):
 
     goals = [create_goal(**goal) for goal in r]
     if datapoints:
-        for goal in tqdm.tqdm(goals):
-            goal.ensure_datapoints()
-
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(goal.get_full_data): goal for goal in goals}
+            for future in concurrent.futures.as_completed(futures):
+                goal = futures[future]
+                goal.dictionary = future.result()
     return goals
 
 
