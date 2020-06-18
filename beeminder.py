@@ -435,7 +435,9 @@ def get_all_goals(r=None, datapoints=False):
     if datapoints:
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             futures = {executor.submit(goal.get_full_data): goal for goal in goals}
-            for future in concurrent.futures.as_completed(futures):
+            for future in tqdm.tqdm(
+                concurrent.futures.as_completed(futures), total=len(goals)
+            ):
                 goal = futures[future]
                 goal.dictionary = future.result()
     return goals
@@ -450,7 +452,12 @@ class CustomEncoder(json.JSONEncoder):
 
 
 class AllGoals:
-    def __init__(self, cache="~/.beeminder-cli/", limit_minutes=30):
+    def __init__(
+        self,
+        # cache="~/.beeminder-cli/",
+        cache=None,
+        limit_minutes=30,
+    ):
         self.limit_minutes = timedelta(minutes=30)
         if cache is None:
             self.cache = None
@@ -462,8 +469,8 @@ class AllGoals:
         if not self.goals:
             self.pull_data()
 
-    def pull_data(self):
-        self.goals = get_all_goals(datapoints=True)
+    def pull_data(self, datapoints=False):
+        self.goals = get_all_goals(datapoints=datapoints)
         self._write_cache()
 
     def _read_cache(self):
@@ -619,6 +626,18 @@ def beeminder(
                         n=n,
                         over_rate=over_rate,
                     )
+                else:
+                    all_goals.pull_data()
+                    goals = all_goals.filter_goals(
+                        manual=manual,
+                        do_less=do_less,
+                        done_today=done_today,
+                        days=days,
+                        since=since,
+                        finished=finished,
+                        n=n,
+                        over_rate=over_rate,
+                    )
                 click.echo_via_pager(_display())
                 click.confirm("Continue?", default=True, abort=True)
         else:
@@ -645,7 +664,7 @@ def update(goal, update_value, description=None):
 
 @beeminder.command()
 def pull():
-    all_goals.pull_data()
+    all_goals.pull_data(datapoints=True)
 
 
 @beeminder.command()
