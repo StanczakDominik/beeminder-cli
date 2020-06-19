@@ -199,7 +199,7 @@ class Goal:
             data_rate = "???"
         else:
             data_rate = f"{self.data_rate:.1f}"
-        return f"{self.format_epsilon_delta} {data_rate} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {round(self.rate, 1)}/{self.runits}     {self.last_datapoint.canonical}"
+        return f"{self.format_epsilon_delta} {data_rate} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {round(self.rate, 1)}/{self.runits}    {self.last_datapoint.canonical[:40]}"
 
     @property
     def is_do_less(self):
