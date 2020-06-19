@@ -152,10 +152,8 @@ class Goal:
                 total_values = relevant_datapoints[-1].value - irrelevant_datapoints[-1].value
             else:
                 total_values = 0
-        elif self.type == "hustler":
+        elif self.type in ["hustler", "drinker"]:
             total_values = sum(dp.value for dp in relevant_datapoints)
-        elif self.type == "drinker":
-            return NotImplemented
         else:
             return NotImplemented
         return total_values / self.rate
@@ -165,14 +163,24 @@ class Goal:
         fraction = self.data_rate
         if fraction is NotImplemented:
             return "?"
-        elif 1 <= fraction:
-            return "Δ"
-        elif 0 < fraction:
-            return "ε"
-        elif 0 == fraction:
-            return "0"
+        if self.type == "drinker":
+            if 1 <= fraction:
+                return "!"
+            elif 0 < fraction:
+                return "ε"
+            elif 0 == fraction:
+                return "Δ"
+            else:
+                return "?"
         else:
-            return "!"
+            if 1 <= fraction:
+                return "Δ"
+            elif 0 < fraction:
+                return "ε"
+            elif 0 == fraction:
+                return "0"
+            else:
+                return "!"
 
     @property
     def losedate(self):
