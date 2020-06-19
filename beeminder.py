@@ -133,7 +133,6 @@ class Goal:
         rate_dict = dict(y=365, m=30, w=7, d=1, h=1 / 24)
         return timedelta(days=rate_dict[self.runits])
 
-
     @functools.cached_property
     def data_rate(self):
         if self.rate == 0:
@@ -142,14 +141,18 @@ class Goal:
         horizon = datetime.now() - self.rate_timedelta
         irrelevant_datapoints = sorted(
             filter(lambda dp: dp.datetime <= horizon, self.datapoints),
-            key = lambda dp: dp.datetime)
+            key=lambda dp: dp.datetime,
+        )
         relevant_datapoints = sorted(
             filter(lambda dp: horizon < dp.datetime, self.datapoints),
-            key = lambda dp: dp.datetime)
+            key=lambda dp: dp.datetime,
+        )
         if self.type in ["biker", "fatloser", "gainer", "inboxer"]:
             relevant_datapoints = list(relevant_datapoints)
             if relevant_datapoints:
-                total_values = relevant_datapoints[-1].value - irrelevant_datapoints[-1].value
+                total_values = (
+                    relevant_datapoints[-1].value - irrelevant_datapoints[-1].value
+                )
             else:
                 total_values = 0
         elif self.type in ["hustler", "drinker"]:
@@ -555,12 +558,14 @@ class AllGoals:
         if manual is not None:
             goals = filter(lambda g: g.is_manual == manual, goals)
         if do_less is not None:
+            # goals = filter(lambda g: not g.is_do_less == do_less, goals)
             goals = filter(lambda g: not g.is_do_less, goals)
         if done_today is not None:
             goals = filter(lambda g: g.is_updated_today == done_today, goals)
         if over_rate is not None:
-            click.echo(f"Filtering by fulfilled rate.")
-            goals = filter(lambda g: g.fulfills_rate() == over_rate, goals)
+            goals = filter(
+                lambda g: not (g.format_epsilon_delta == "Δ") == over_rate, goals
+            )
 
         if since is not None:
             horizon = now - timedelta(days=since)
