@@ -38,6 +38,7 @@ from dataclasses import dataclass
 import tqdm
 import pathlib
 import concurrent.futures
+import functools
 
 __version__ = "0.1.0"
 
@@ -132,27 +133,41 @@ class Goal:
         rate_dict = dict(y=365, m=30, w=7, d=1, h=1 / 24)
         return timedelta(days=rate_dict[self.runits])
 
-    def fulfills_rate(self):
-        horizon = datetime.now() - self.rate_timedelta
-        if self.last_datapoint is None:
-            return False
 
-        if horizon < self.last_datapoint.datetime:
-            if self.rate <= self.last_datapoint.value:
-                return True
-            else:
-                return self.datapoints_fulfill_rate()
-        else:
-            return False
-
-    def datapoints_fulfill_rate(self):
-        # TODO refactor these two together
-        click.echo(f"Using nuclear option for {self}")
+    @functools.cached_property
+    def data_rate(self):
+        if self.rate == 0:
+            return NotImplemented
         self.ensure_datapoints()
         horizon = datetime.now() - self.rate_timedelta
+        irrelevant_datapoints = sorted(
+            filter(lambda dp: dp.datetime <= horizon, self.datapoints),
+            key = lambda dp: dp.datetime)
         relevant_datapoints = filter(lambda dp: horizon < dp.datetime, self.datapoints)
-        total_values = sum(dp.value for dp in relevant_datapoints)
-        return self.rate <= total_values
+        if self.type in ["biker", "fatloser", "gainer", "inboxer"]:
+            final_value = irrelevant_datapoints[-1].value
+            total_values = sum(dp.value - final_value for dp in relevant_datapoints)
+        elif self.type == "hustler":
+            total_values = sum(dp.value for dp in relevant_datapoints)
+        elif self.type == "drinker":
+            return NotImplemented
+        else:
+            return NotImplemented
+        return total_values / self.rate
+
+    @functools.cached_property
+    def format_epsilon_delta(self):
+        fraction = self.data_rate
+        if fraction is NotImplemented:
+            return "?"
+        elif 1 <= fraction:
+            return "Δ"
+        elif 0 < fraction:
+            return "ε"
+        elif 0 == fraction:
+            return "0"
+        else:
+            return "!"
 
     @property
     def losedate(self):
@@ -164,7 +179,11 @@ class Goal:
 
     @property
     def summary(self):
-        return f"{'x' if self.is_updated_today else 'o'} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {round(self.rate, 1)}/{self.runits}     {self.last_datapoint.canonical}"
+        if self.data_rate is NotImplemented:
+            data_rate = "???"
+        else:
+            data_rate = f"{self.data_rate:.1f}"
+        return f"{self.format_epsilon_delta} {data_rate} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {round(self.rate, 1)}/{self.runits}     {self.last_datapoint.canonical}"
 
     @property
     def is_do_less(self):
@@ -469,7 +488,7 @@ class AllGoals:
         if not self.goals:
             self.pull_data()
 
-    def pull_data(self, datapoints=False):
+    def pull_data(self, datapoints=True):
         self.goals = get_all_goals(datapoints=datapoints)
         self._write_cache()
 
@@ -687,8 +706,9 @@ def fetch_remotes():
 @beeminder.command()
 def debug():
     goals = all_goals.goals
-    goal = goals[0]
+    goal = goals[3]
     breakpoint()
+    goal.data_rate()
 
 
 if __name__ == "__main__":
