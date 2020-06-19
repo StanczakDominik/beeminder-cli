@@ -143,10 +143,15 @@ class Goal:
         irrelevant_datapoints = sorted(
             filter(lambda dp: dp.datetime <= horizon, self.datapoints),
             key = lambda dp: dp.datetime)
-        relevant_datapoints = filter(lambda dp: horizon < dp.datetime, self.datapoints)
+        relevant_datapoints = sorted(
+            filter(lambda dp: horizon < dp.datetime, self.datapoints),
+            key = lambda dp: dp.datetime)
         if self.type in ["biker", "fatloser", "gainer", "inboxer"]:
-            final_value = irrelevant_datapoints[-1].value
-            total_values = sum(dp.value - final_value for dp in relevant_datapoints)
+            relevant_datapoints = list(relevant_datapoints)
+            if relevant_datapoints:
+                total_values = relevant_datapoints[-1].value - irrelevant_datapoints[-1].value
+            else:
+                total_values = 0
         elif self.type == "hustler":
             total_values = sum(dp.value for dp in relevant_datapoints)
         elif self.type == "drinker":
@@ -706,7 +711,7 @@ def fetch_remotes():
 @beeminder.command()
 def debug():
     goals = all_goals.goals
-    goal = goals[3]
+    goal = all_goals.pick_goal(slug="sc2mmr")
     breakpoint()
     goal.data_rate()
 
