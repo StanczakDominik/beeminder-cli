@@ -114,6 +114,15 @@ class Goal:
         # self.updated_at = datetime.fromtimestamp(goal.get("updated_at"))
 
     @property
+    def losedate(self):
+        return datetime.utcfromtimestamp(self.dictionary["losedate"])
+
+    @property
+    def is_due_today(self):
+        horizon = datetime.now() + timedelta(hours=24)
+        return self.losedate <= horizon
+
+    @property
     def bump(self):
         delta = self.safebump - self.curval
         if self.hhmmformat:
@@ -510,7 +519,7 @@ class AllGoals:
 
     def _read_cache(self):
         if self.cache is None:
-            return
+            self.pull_data()
         try:
             file = self.cache / f"{beeminder_auth_token}.json"
 
@@ -554,25 +563,31 @@ class AllGoals:
         goals = sorted(self.goals, key=lambda g: g.losedate)
 
         if finished is not None:
-            goals = filter(lambda g: g.won == finished, goals)
+            goals = filter(lambda g: g.is_due_today or g.won == finished, goals)
         if manual is not None:
-            goals = filter(lambda g: g.is_manual == manual, goals)
+            goals = filter(lambda g: g.is_due_today or g.is_manual == manual, goals)
         if do_less is not None:
             # goals = filter(lambda g: not g.is_do_less == do_less, goals)
-            goals = filter(lambda g: not g.is_do_less, goals)
+            goals = filter(lambda g: g.is_due_today or not g.is_do_less, goals)
         if done_today is not None:
-            goals = filter(lambda g: g.is_updated_today == done_today, goals)
+            goals = filter(
+                lambda g: g.is_due_today or g.is_updated_today == done_today, goals
+            )
         if over_rate is not None:
             goals = filter(
-                lambda g: not (g.format_epsilon_delta == "Δ") == over_rate, goals
+                lambda g: g.is_due_today
+                or not (g.format_epsilon_delta == "Δ") == over_rate,
+                goals,
             )
 
         if since is not None:
             horizon = now - timedelta(days=since)
-            goals = filter(lambda g: g.last_datapoint.datetime < horizon, goals)
+            goals = filter(
+                lambda g: g.is_due_today or g.last_datapoint.datetime < horizon, goals
+            )
         if days is not None:
             horizon = now + timedelta(days=days)
-            goals = filter(lambda g: g.losedate <= horizon, goals)
+            goals = filter(lambda g: g.is_due_today or g.losedate <= horizon, goals)
         if n is not None:
             goals = goals[: int(n)]
 
