@@ -147,13 +147,13 @@ class Goal:
         if self.rate == 0:
             return NotImplemented
         self.ensure_datapoints()
-        horizon = datetime.now() - self.rate_timedelta
+        horizon = datetime.now().date() - self.rate_timedelta
         irrelevant_datapoints = sorted(
-            filter(lambda dp: dp.datetime <= horizon, self.datapoints),
+            filter(lambda dp: dp.datetime.date() <= horizon, self.datapoints),
             key=lambda dp: dp.datetime,
         )
         relevant_datapoints = sorted(
-            filter(lambda dp: horizon < dp.datetime, self.datapoints),
+            filter(lambda dp: horizon < dp.datetime.date(), self.datapoints),
             key=lambda dp: dp.datetime,
         )
         if self.type in ["biker", "fatloser", "gainer", "inboxer"]:
