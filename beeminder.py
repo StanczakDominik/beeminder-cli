@@ -589,7 +589,7 @@ class AllGoals:
             horizon = now + timedelta(days=days)
             goals = filter(lambda g: g.is_due_today or g.losedate <= horizon, goals)
         if n is not None:
-            goals = goals[: int(n)]
+            goals = list(goals)[: int(n)]
 
         return goals
 
@@ -668,28 +668,20 @@ def beeminder(
                     days += 1
                     click.echo(f"Incrementing days to {days}")
                     all_goals._read_cache()
-                    goals = all_goals.filter_goals(
-                        manual=manual,
-                        do_less=do_less,
-                        done_today=done_today,
-                        days=days,
-                        since=since,
-                        finished=finished,
-                        n=n,
-                        over_rate=over_rate,
-                    )
-                else:
-                    all_goals.pull_data()
-                    goals = all_goals.filter_goals(
-                        manual=manual,
-                        do_less=do_less,
-                        done_today=done_today,
-                        days=days,
-                        since=since,
-                        finished=finished,
-                        n=n,
-                        over_rate=over_rate,
-                    )
+                elif n is not None:
+                    n += 3
+
+                all_goals._read_cache()
+                goals = all_goals.filter_goals(
+                    manual=manual,
+                    do_less=do_less,
+                    done_today=done_today,
+                    days=days,
+                    since=since,
+                    finished=finished,
+                    n=n,
+                    over_rate=over_rate,
+                )
                 click.echo_via_pager(_display())
                 click.confirm("Continue?", default=True, abort=True)
         else:
