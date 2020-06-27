@@ -39,6 +39,7 @@ import tqdm
 import pathlib
 import concurrent.futures
 import functools
+from pprint import pprint
 
 __version__ = "0.1.0"
 
@@ -411,34 +412,27 @@ class YoutubeBacklogGoal(Goal):
         super().update(total_days, message)
 
 
-class PubsBacklogGoal(Goal):
-    def get_dates(self):
+class PubsCountGoal(Goal):
+    def get_items(self):
         from pubs import repo, config
         from pubs.query import get_paper_filter
 
         conf_path = config.get_confpath(verify=False)  # will be checked on load
         conf = config.load_conf(path=conf_path)
         rp = repo.Repository(conf)
-        query = ["tag:TODO"]
-        papers = list(filter(get_paper_filter(query), rp.all_papers()))
-        query2 = ["tag:TodoAtWork"]
-        citekeys = [paper.citekey for paper in papers]
-
-        papers2 = list(filter(get_paper_filter(query2), rp.all_papers()))
-        for paper in papers2:
-            if paper.citekey not in citekeys:
-                papers.append(paper)
-        rp.close()
-        dates = [paper.added for paper in papers]
-        return dates
+        all_papers = {}
+        for query in ["tag:TODO", "tag:TodoAtWork", "tag:Automated", "tag:InProgress"]:
+            papers = list(filter(get_paper_filter([query]), rp.all_papers()))
+            for paper in papers:
+                all_papers[paper.citekey] = paper
+        return all_papers.values()
 
     def update(self, *args, **kwargs):
-        dates = self.get_dates()
-        total = -np.sum(np.array(dates) - now)
-        total_days = total.days + total.seconds / 3600 / 24
+        items = self.get_items()
+        count_items = len(items)
 
-        message = f"Incremented {self.slug} to {total_days} automatically from {len(dates)} items at {now}"
-        super().update(total_days, message)
+        message = f"Incremented {self.slug} to {count_items} items at {now}"
+        super().update(count_items, message)
 
 
 custom_goals = {
@@ -447,7 +441,7 @@ custom_goals = {
     "todoist-breakdown": TodoistHighPriority,
     "todoist-inbox": TodoistInbox,
     "youtube-backlog-upgrade": YoutubeBacklogGoal,
-    "papers-backlog": PubsBacklogGoal,
+    "papers-backlog": PubsCountGoal,
 }
 
 
