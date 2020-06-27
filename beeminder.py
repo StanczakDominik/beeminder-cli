@@ -235,7 +235,7 @@ class Goal:
         return sorted(datapoints, key=lambda dp: dp.datetime)
 
     def ensure_datapoints(self):
-        if not self.dictionary["datapoints"]:
+        if "datapoints" not in self.dictionary or not self.dictionary["datapoints"]:
             self.get_full_data()
 
     @property
@@ -275,7 +275,6 @@ class Goal:
         click.echo(f"Updating {self} with {value} and description {description}")
         return_value = increment_beeminder(description, self.slug, value)
         self.get_full_data()
-        all_goals._write_cache()
         return return_value
 
     def show_web(self):
@@ -293,7 +292,6 @@ class RemoteApiGoal(Goal):
         url = f"https://www.beeminder.com/api/v1/users/{username}/goals/{self.slug}/refresh_graph.json"
         r = requests.get(url, params=auth)
         self.get_full_data()
-        all_goals._write_cache()
         click.echo(f"Updated {self.slug}.")
 
 
@@ -458,29 +456,6 @@ def create_goal(**goal):
         raise ValueError(f"What autodata is {goal['autodata']}?")
 
 
-def pull_goals():
-    click.echo("Pulling data...")
-    url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
-    r = requests.get(url, params=auth).json()
-    return r
-
-
-def get_all_goals(r=None, datapoints=False):
-    if r is None:
-        r = pull_goals()
-
-    goals = [create_goal(**goal) for goal in r]
-    if datapoints:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            futures = {executor.submit(goal.get_full_data): goal for goal in goals}
-            for future in tqdm.tqdm(
-                concurrent.futures.as_completed(futures), total=len(goals)
-            ):
-                goal = futures[future]
-                goal.dictionary = future.result()
-    return goals
-
-
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Goal):
@@ -490,55 +465,19 @@ class CustomEncoder(json.JSONEncoder):
 
 
 class AllGoals:
-    def __init__(
-        self,
-        # cache="~/.beeminder-cli/",
-        cache=None,
-        limit_minutes=30,
-    ):
-        self.limit_minutes = timedelta(minutes=30)
-        if cache is None:
-            self.cache = None
-        else:
-            self.cache = pathlib.Path(cache).expanduser()
-            os.makedirs(self.cache, exist_ok=True)
-        self.goals = []
-        self._read_cache()
-        if not self.goals:
-            self.pull_data()
+    def __init__(self):
+        url = f"https://www.beeminder.com/api/v1/users/{username}/goals.json"
+        r = requests.get(url, params=auth).json()
+        self.goals = [create_goal(**goal) for goal in r]
 
-    def pull_data(self, datapoints=True):
-        self.goals = get_all_goals(datapoints=datapoints)
-        self._write_cache()
-
-    def _read_cache(self):
-        if self.cache is None:
-            self.pull_data()
-        try:
-            file = self.cache / f"{beeminder_auth_token}.json"
-
-            mtime = datetime.fromtimestamp(file.stat().st_mtime)
-            if mtime + self.limit_minutes < datetime.now():
-                return
-
-            with open(file) as f:
-                state = f.read()
-            self.goals = get_all_goals(json.loads(state))
-        except Exception:
-            return
-
-    def _write_cache(self):
-        if self.cache is None:
-            return
-        with open(self.cache / f"{beeminder_auth_token}.json", "w") as f:
-            json.dump(self.goals, f, indent=2, sort_keys=True, cls=CustomEncoder)
-
-    def __call__(self, *, force=False):
-        if not force:
-            self.read_cache()
-        else:
-            self.goals = get_all_goals()
-            self._write_cache()
+    def ensure_datapoints(self):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(goal.get_full_data): goal for goal in self.goals}
+            for future in tqdm.tqdm(
+                concurrent.futures.as_completed(futures), total=len(goals)
+            ):
+                goal = futures[future]
+                goal.dictionary = future.result()
 
     def pick_goal(self, **goal):
         return [g for g in self.goals if g.slug == goal["slug"]][0]
@@ -661,11 +600,10 @@ def beeminder(
                 elif days is not None:
                     days += 1
                     click.echo(f"Incrementing days to {days}")
-                    all_goals._read_cache()
                 elif n is not None:
                     n += 3
 
-                all_goals._read_cache()
+                all_goals.ensure_datapoints()
                 goals = all_goals.filter_goals(
                     manual=manual,
                     do_less=do_less,
@@ -701,19 +639,17 @@ def update(goal, update_value, description=None):
 
 
 @beeminder.command()
-def pull():
-    all_goals.pull_data(datapoints=True)
-
-
-@beeminder.command()
 @click.argument("goal", type=str)
 def web(goal):
+    """Display a goal"""
     goal = all_goals.pick_goal(slug=goal)
     goal.show_web()
 
 
 @beeminder.command()
 def fetch_remotes():
+    """Force updates of remote autodata goals."""
+
     def only_remotes(goal):
         return not (goal.autodata is None or goal.autodata == "api")
 
@@ -724,6 +660,8 @@ def fetch_remotes():
 
 @beeminder.command()
 def debug():
+    """Open a debugger with goal data pulled."""
+    all_goals.ensure_datapoints()
     goals = all_goals.goals
     goal = all_goals.pick_goal(slug="sc2mmr")
     breakpoint()
