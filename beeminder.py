@@ -40,6 +40,7 @@ import pathlib
 import concurrent.futures
 import functools
 from pprint import pprint
+from tabulate import tabulate
 
 __version__ = "0.1.0"
 
@@ -123,13 +124,19 @@ class Goal:
         horizon = datetime.now() + timedelta(hours=24)
         return self.losedate <= horizon
 
-    @property
-    def bump(self):
-        delta = self.safebump - self.curval
+    def format_delta(self, delta):
         if self.hhmmformat:
             return humanize.naturaldelta(timedelta(hours=delta))
         else:
-            return int(math.ceil(delta))
+            return f"{int(math.ceil(delta))} {self.dictionary['gunits']}"
+
+    @property
+    def bumpval(self):
+        return self.safebump - self.curval
+
+    @property
+    def bump(self):
+        return self.format_delta(self.bumpval)
 
     @property
     def rate(self):
@@ -207,12 +214,49 @@ class Goal:
         return humanize.naturalday(self.losedate)
 
     @property
-    def summary(self):
+    def data_rate_format(self):
         if self.data_rate is NotImplemented:
-            data_rate = "???"
+            return "???"
         else:
-            data_rate = f"{self.data_rate:.1f}"
-        return f"{self.format_epsilon_delta} {data_rate} {self.slug.upper():25}{self.bump:^15} {self.formatted_losedate:12}   {round(self.rate, 1)}/{self.runits}    {self.last_datapoint.canonical[:40]}"
+            return f"{self.data_rate:.1f}"
+
+    @property
+    def remaining_format(self):
+        if self.data_rate is NotImplemented:
+            return "???"
+        if self.data_rate >= 1:
+            return "------"
+        remaining = (1 - self.data_rate) * self.rate
+        remaining_fmt = self.format_delta(remaining)
+        if remaining_fmt == self.bump:
+            return "--||--"
+        return remaining_fmt
+
+    @property
+    def summary(self):
+        return (
+            self.format_epsilon_delta,
+            self.data_rate_format,
+            self.slug.upper(),
+            self.bump,
+            self.formatted_losedate,
+            self.remaining_format,
+            f"{round(self.rate, 1)}/{self.runits}",
+            self.last_datapoint.canonical[:40],
+        )
+
+    @property
+    def summary_header(self):
+        return (
+            "ε-Δ",
+            "frac",
+            "name",
+            "minimal bump to not derail",
+            "lose date",
+            "remaining to satisfy rate",
+            "rate",
+            "last datapoint",
+        )
 
     @property
     def is_do_less(self):
@@ -479,8 +523,7 @@ class AllGoals:
             for future in tqdm.tqdm(
                 concurrent.futures.as_completed(futures), total=len(self.goals)
             ):
-                goal = futures[future]
-                goal.dictionary = future.result()
+                futures[future].dictionary = future.result()
 
     def pick_goal(self, **goal):
         return [g for g in self.goals if g.slug == goal["slug"]][0]
@@ -501,7 +544,11 @@ class AllGoals:
         if finished is not None:
             goals = filter(lambda g: g.is_due_today or g.won == finished, goals)
         if manual is not None:
-            goals = filter(lambda g: g.is_due_today or g.is_manual == manual, goals)
+            goals = filter(
+                lambda g: g.is_due_today
+                or (g.is_manual == manual and "tasker" not in g.slug),
+                goals,
+            )
         if do_less is not None:
             # goals = filter(lambda g: not g.is_do_less == do_less, goals)
             goals = filter(lambda g: g.is_due_today or not g.is_do_less, goals)
@@ -527,7 +574,7 @@ class AllGoals:
         if n is not None:
             goals = list(goals)[: int(n)]
 
-        return goals
+        return list(goals)
 
 
 all_goals = AllGoals()
@@ -575,33 +622,42 @@ def beeminder(
 ):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
-
-        goals = all_goals.filter_goals(
-            manual=manual,
-            do_less=do_less,
-            done_today=done_today,
-            days=days,
-            since=since,
-            finished=finished,
-            n=n,
-            over_rate=over_rate,
+        all_goals.ensure_datapoints()
+        goals = list(
+            all_goals.filter_goals(
+                manual=manual,
+                do_less=do_less,
+                done_today=done_today,
+                days=days,
+                since=since,
+                finished=finished,
+                n=n,
+                over_rate=over_rate,
+            )
         )
 
-        def _display():
-            for goal in goals:
-                yield click.style(goal.summary, fg=goal.color) + "\n"
+        def display(goals):
+            alld = (goal.summary for goal in goals)
+            contents = [goals[0].summary_header, *alld]
+            table = tabulate(contents, headers="firstrow").splitlines()
+            lines = [line + "\n" for line in table[:2]] + [
+                click.style(line, fg=goal.color) + "\n"
+                for line, goal in zip(table[2:], goals)
+            ]
+            click.echo_via_pager(lines)
 
         if random:
             goal = choice(goals)
             click.secho(goal.summary, fg=goal.color)
+
         elif watch:
-            click.echo_via_pager(list(_display()))
+            display(goals)
             while True:
                 if since is not None:
-                    since += 1
+                    since += 3
                     click.echo(f"Incrementing since to {since}")
                 elif days is not None:
-                    days += 1
+                    days += 3
                     click.echo(f"Incrementing days to {days}")
                 elif n is not None:
                     n += 3
@@ -617,11 +673,11 @@ def beeminder(
                     n=n,
                     over_rate=over_rate,
                 )
-                click.echo_via_pager(_display())
+                display(goals)
                 click.confirm("Continue?", default=True, abort=True)
         else:
             all_goals.ensure_datapoints()
-            click.echo_via_pager(list(_display()))
+            display(goals)
     else:
         pass
 
@@ -669,7 +725,6 @@ def debug():
     goals = all_goals.goals
     goal = all_goals.pick_goal(slug="sc2mmr")
     breakpoint()
-    goal.data_rate()
 
 
 if __name__ == "__main__":
