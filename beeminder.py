@@ -160,9 +160,12 @@ class Goal:
         if self.type in ["biker", "fatloser", "gainer", "inboxer"]:
             relevant_datapoints = list(relevant_datapoints)
             if relevant_datapoints:
-                total_values = (
-                    relevant_datapoints[-1].value - irrelevant_datapoints[-1].value
-                )
+                if irrelevant_datapoints:
+                    total_values = (
+                        relevant_datapoints[-1].value - irrelevant_datapoints[-1].value
+                    )
+                else:
+                    return NotImplemented
             else:
                 total_values = 0
         elif self.type in ["hustler", "drinker"]:
@@ -474,7 +477,7 @@ class AllGoals:
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             futures = {executor.submit(goal.get_full_data): goal for goal in self.goals}
             for future in tqdm.tqdm(
-                concurrent.futures.as_completed(futures), total=len(goals)
+                concurrent.futures.as_completed(futures), total=len(self.goals)
             ):
                 goal = futures[future]
                 goal.dictionary = future.result()
@@ -592,7 +595,7 @@ def beeminder(
             goal = choice(goals)
             click.secho(goal.summary, fg=goal.color)
         elif watch:
-            click.echo_via_pager(_display())
+            click.echo_via_pager(list(_display()))
             while True:
                 if since is not None:
                     since += 1
@@ -617,7 +620,8 @@ def beeminder(
                 click.echo_via_pager(_display())
                 click.confirm("Continue?", default=True, abort=True)
         else:
-            click.echo_via_pager(_display())
+            all_goals.ensure_datapoints()
+            click.echo_via_pager(list(_display()))
     else:
         pass
 
