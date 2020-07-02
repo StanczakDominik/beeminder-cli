@@ -752,9 +752,13 @@ def fetch_remotes():
     def only_remotes(goal):
         return not (goal.autodata is None or goal.autodata == "api")
 
-    goals = filter(only_remotes, all_goals.goals)
-    for goal in goals:
-        goal.update()
+    goals = list(filter(only_remotes, all_goals.goals))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(goal.update): goal for goal in goals}
+        for future in tqdm.tqdm(
+            concurrent.futures.as_completed(futures), total=len(goals)
+        ):
+            pass
 
 
 @beeminder.command()
