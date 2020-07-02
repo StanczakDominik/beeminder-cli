@@ -17,9 +17,7 @@ updates; asks for nothing
 this is an api goal; checks for registered handlers, applies them;
 can be called via systemctl assuming secrets are provided...
 >>> beeminder todoist
-this is an external goal; displays useful information
->>> beeminder todoist edit
-"""
+this is an external goal; displays useful information >>> beeminder todoist edit """
 import requests
 from datetime import datetime, timedelta, timezone
 import json
@@ -41,6 +39,7 @@ import concurrent.futures
 import functools
 from pprint import pprint
 from tabulate import tabulate
+import subprocess
 
 __version__ = "0.1.0"
 
@@ -264,6 +263,8 @@ class Goal:
 
     @property
     def is_manual(self):
+        if self.is_tasker_goal:
+            return False
         return self.autodata is None
 
     def get_full_data(self):
@@ -284,6 +285,10 @@ class Goal:
     def ensure_datapoints(self):
         if "datapoints" not in self.dictionary or not self.dictionary["datapoints"]:
             self.get_full_data()
+
+    @property
+    def is_tasker_goal(self):
+        return "tasker" in self.slug.lower() or "tasker" in self.title.lower()
 
     @property
     def is_updated_today(self):
@@ -457,8 +462,19 @@ class YoutubeBacklogGoal(Goal):
         super().update(total_days, message)
 
 
-class PubsCountGoal(Goal):
-    def get_items(self):
+class CountGoal(Goal):
+    def get_count(self):
+        raise NotImplementedError
+
+    def update(self, *args, **kwargs):
+        count_items = self.get_count()
+
+        message = f"Incremented {self.slug} to {count_items} items at {now}"
+        super().update(count_items, message)
+
+
+class PubsCountGoal(CountGoal):
+    def get_count(self):
         from pubs import repo, config
         from pubs.query import get_paper_filter
 
@@ -470,14 +486,35 @@ class PubsCountGoal(Goal):
             papers = list(filter(get_paper_filter([query]), rp.all_papers()))
             for paper in papers:
                 all_papers[paper.citekey] = paper
-        return all_papers.values()
+        return len(all_papers)
 
-    def update(self, *args, **kwargs):
-        items = self.get_items()
-        count_items = len(items)
 
-        message = f"Incremented {self.slug} to {count_items} items at {now}"
-        super().update(count_items, message)
+class BashCountGoal(CountGoal):
+    command = NotImplemented
+
+    def get_count(self):
+        if self.command is NotImplemented:
+            raise ValueError("BashCountGoal subclass must implement `command`")
+        proc = subprocess.run(
+            self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
+        )
+        return int(proc.stdout.strip())
+
+
+class ScreenshotCountGoal(BashCountGoal):
+    command = r"ls ~/Pictures/Screenshot_20* | wc -l"
+
+
+class PapersNoteCountGoal(BashCountGoal):
+    command = r"rg  '\- \[ \]' ~/.pubs/notes | cat | wc -l"
+
+
+class JoplinNoteCountGoal(BashCountGoal):
+    command = r"rg  '\- \[ \]' ~/Sync/Joplin | cat | wc -l"
+
+
+class JrnlLengthGoal(BashCountGoal):
+    command = r"jrnl -from 2000 | sed -e 's/| //' | wc -w"
 
 
 custom_goals = {
@@ -487,6 +524,10 @@ custom_goals = {
     "todoist-inbox": TodoistInbox,
     "youtube-backlog-upgrade": YoutubeBacklogGoal,
     "papers-backlog": PubsCountGoal,
+    "joplin-notes": JoplinNoteCountGoal,
+    "papers-notes": PapersNoteCountGoal,
+    "screenshots-parse": ScreenshotCountGoal,
+    "jrnl": JrnlLengthGoal,
 }
 
 
@@ -544,11 +585,7 @@ class AllGoals:
         if finished is not None:
             goals = filter(lambda g: g.is_due_today or g.won == finished, goals)
         if manual is not None:
-            goals = filter(
-                lambda g: g.is_due_today
-                or (g.is_manual == manual and "tasker" not in g.slug),
-                goals,
-            )
+            goals = filter(lambda g: g.is_due_today or g.is_manual == manual, goals)
         if do_less is not None:
             # goals = filter(lambda g: not g.is_do_less == do_less, goals)
             goals = filter(lambda g: g.is_due_today or not g.is_do_less, goals)
@@ -605,6 +642,7 @@ class AliasedGroup(click.Group):
 @click.option("-n", type=int)
 @click.option("-r", "--random", is_flag=True)
 @click.option("-w", "--watch", is_flag=True)
+@click.option("--step", type=int, default=3)
 @click.pass_context
 def beeminder(
     ctx,
@@ -619,6 +657,7 @@ def beeminder(
     # commands
     random=False,
     watch=False,
+    step=3,
 ):
     """Display timings for beeminder goals."""
     if ctx.invoked_subcommand is None:
@@ -654,13 +693,13 @@ def beeminder(
             display(goals)
             while True:
                 if since is not None:
-                    since += 3
+                    since += step
                     click.echo(f"Incrementing since to {since}")
                 elif days is not None:
-                    days += 3
+                    days += step
                     click.echo(f"Incrementing days to {days}")
                 elif n is not None:
-                    n += 3
+                    n += step
 
                 all_goals.ensure_datapoints()
                 goals = all_goals.filter_goals(
@@ -723,7 +762,7 @@ def debug():
     """Open a debugger with goal data pulled."""
     all_goals.ensure_datapoints()
     goals = all_goals.goals
-    goal = all_goals.pick_goal(slug="sc2mmr")
+    goal = all_goals.pick_goal(slug="pomodoro")
     breakpoint()
 
 
