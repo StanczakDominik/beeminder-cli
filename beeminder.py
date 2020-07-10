@@ -238,9 +238,9 @@ class Goal:
             self.data_rate_format,
             self.slug.upper(),
             self.bump,
-            self.formatted_losedate,
             self.remaining_format,
             f"{round(self.rate, 1)}/{self.runits}",
+            self.formatted_losedate,
             self.last_datapoint.canonical[:40],
         )
 
@@ -251,9 +251,9 @@ class Goal:
             "frac",
             "name",
             "minimal bump to not derail",
-            "lose date",
             "remaining to satisfy rate",
             "rate",
+            "lose date",
             "last datapoint",
         )
 
