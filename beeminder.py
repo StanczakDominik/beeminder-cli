@@ -413,7 +413,11 @@ class TodoistNumberOfTasksGoal(TodoistGoal):
 
     def update(self, *args, **kwargs):
         tasks = self.api.items.all(self._filter)
-        message = f"{self.slug}: {len(tasks)} tasks at {now}"
+        if len(tasks) <= 5:
+            task_message = "; ".join([task["content"] for task in tasks])
+        else:
+            task_message = len(tasks)
+        message = f"{self.slug}: {task_message} tasks at {now}"
         super().update(len(tasks), message)
 
 
