@@ -19,7 +19,7 @@ can be called via systemctl assuming secrets are provided...
 >>> beeminder todoist
 this is an external goal; displays useful information >>> beeminder todoist edit """
 import requests
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 import json
 import click
 import os
@@ -505,6 +505,35 @@ class BashCountGoal(CountGoal):
         return int(proc.stdout.strip())
 
 
+class TogglCountGoal(CountGoal):
+    def get_count(self):
+        key = os.environ["TOGGL_KEY"]
+        auth = (key, "api_token")
+        workspace = os.environ["TOGGL_WORKSPACE"]
+        email = os.environ["TOGGL_EMAIL"]
+        work_tag = os.environ["TOGGL_WORK_TAG"]
+        page = 1
+        results = []
+        while True:
+            params = {
+                "user_agent": email,
+                "workspace_id": int(workspace),
+                "since": date(2020, 1, 1),
+                "project_ids": 0,
+                "page": page,
+            }
+
+            url = "https://toggl.com/reports/api/v2/details"
+            r = requests.get(url, auth=auth, params=params)
+            data = r.json()["data"]
+            results.extend(data)
+            if len(data) == r.json()["per_page"]:
+                page += 1
+            else:
+                break
+        return len(results)
+
+
 class ScreenshotCountGoal(BashCountGoal):
     command = r"ls ~/Pictures/Screenshot_20* | wc -l"
 
@@ -526,12 +555,13 @@ custom_goals = {
     "todoist-unprioritized": TodoistUnprioritized,
     "todoist-breakdown": TodoistHighPriority,
     "todoist-inbox": TodoistInbox,
-    "youtube-backlog-upgrade": YoutubeBacklogGoal,
+    "youtube-backlog": YoutubeBacklogGoal,
     "papers-backlog": PubsCountGoal,
     "joplin-notes": JoplinNoteCountGoal,
     "papers-notes": PapersNoteCountGoal,
     "screenshots-parse": ScreenshotCountGoal,
     "jrnl": JrnlLengthGoal,
+    "toggl-tag": TogglCountGoal,
 }
 
 
