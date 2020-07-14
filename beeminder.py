@@ -302,10 +302,14 @@ class Goal:
         return f"Updated from {self} at {now}"
 
     @property
+    def losedelta(self):
+        now = datetime.now()
+        delta = days(losedate - self.losedate - now)
+
+    @property
     def color(self):
         lane = self.dictionary["lane"]
         yaw = self.dictionary["yaw"]
-        losedate = self._losedate
         if lane * yaw >= -1:  #  on the road or on the good side of it (blue or green)
             return "blue"
         elif lane * yaw > 1:  # good side of the road (green dot)
@@ -613,37 +617,34 @@ class AllGoals:
         n: int = None,
         since: int = None,
         days: int = None,
+        due_today: bool = None,
     ):
         goals = sorted(self.goals, key=lambda g: g.losedate)
 
+        conditions = dict()
         if finished is not None:
-            goals = filter(lambda g: g.is_due_today or g.won == finished, goals)
+            conditions["finished"] = lambda g: g.won == finished
         if manual is not None:
-            goals = filter(lambda g: g.is_due_today or g.is_manual == manual, goals)
+            conditions["manual"] = lambda g: g.is_manual == manual
         if do_less is not None:
-            # goals = filter(lambda g: not g.is_do_less == do_less, goals)
-            goals = filter(lambda g: g.is_due_today or not g.is_do_less, goals)
+            conditions["do_less"] = lambda g: g.is_do_less == do_less
         if done_today is not None:
-            goals = filter(
-                lambda g: g.is_due_today or g.is_updated_today == done_today, goals
-            )
+            conditions["done_today"] = lambda g: g.is_updated_today == done_today
         if over_rate is not None:
-            goals = filter(
-                lambda g: g.is_due_today
-                or not (g.format_epsilon_delta == "Δ") == over_rate,
-                goals,
-            )
-
+            conditions["over_rate"] = lambda g: g.format_epsilon_delta != "Δ"
         if since is not None:
-            horizon = now - timedelta(days=since)
-            goals = filter(
-                lambda g: g.is_due_today or g.last_datapoint.datetime < horizon, goals
+            conditions["since"] = lambda g: g.last_datapoint.datetime < now - timedelta(
+                days=since
             )
         if days is not None:
-            horizon = now + timedelta(days=days)
-            goals = filter(lambda g: g.is_due_today or g.losedate <= horizon, goals)
+            conditions["in_days"] = lambda g: g.losedate <= now + timedelta(days=days)
+
+        goals = list(
+            filter(lambda g: all(conditions[key](g) for key in conditions), goals)
+        )
+
         if n is not None:
-            goals = list(goals)[: int(n)]
+            goals = goals[: int(n)]
 
         return list(goals)
 
@@ -663,6 +664,10 @@ class AliasedGroup(click.Group):
         elif len(matches) == 1:
             return click.Group.get_command(self, ctx, matches[0])
         ctx.fail("Too many matches: %s" % ", ".join(sorted(matches)))
+
+
+def ensure_datapoints(goals):
+    raise NotImplementedError
 
 
 @click.group(invoke_without_command=True, cls=AliasedGroup)
@@ -735,7 +740,6 @@ def beeminder(
                 elif n is not None:
                     n += step
 
-                all_goals.ensure_datapoints()
                 goals = all_goals.filter_goals(
                     manual=manual,
                     do_less=do_less,
@@ -748,8 +752,8 @@ def beeminder(
                 )
                 display(goals)
                 click.confirm("Continue?", default=True, abort=True)
+                all_goals.ensure_datapoints()
         else:
-            all_goals.ensure_datapoints()
             display(goals)
     else:
         pass
