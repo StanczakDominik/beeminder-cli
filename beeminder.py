@@ -538,6 +538,16 @@ class TogglCountGoal(CountGoal):
         return len(results)
 
 
+class GithubCountGoal(CountGoal):
+    def get_count(self):
+        GITHUBUSERNAME = os.environ["GITHUBUSERNAME"]
+        GITHUBTOKEN = os.environ["GITHUBTOKEN"]
+        response = requests.get(
+            "https://api.github.com/notifications", auth=(GITHUBUSERNAME, GITHUBTOKEN)
+        )
+        return len(response.json())
+
+
 class ScreenshotCountGoal(BashCountGoal):
     command = r"ls ~/Pictures/Screenshot_20* | wc -l"
 
@@ -566,6 +576,7 @@ custom_goals = {
     "screenshots-parse": ScreenshotCountGoal,
     "jrnl": JrnlLengthGoal,
     "toggl-tag": TogglCountGoal,
+    "github-inbox": GithubCountGoal,
 }
 
 
@@ -603,6 +614,7 @@ class AllGoals:
                 concurrent.futures.as_completed(futures), total=len(self.goals)
             ):
                 futures[future].dictionary = future.result()
+        return self
 
     def pick_goal(self, **goal):
         return [g for g in self.goals if g.slug == goal["slug"]][0]
@@ -740,19 +752,22 @@ def beeminder(
                 elif n is not None:
                     n += step
 
-                goals = all_goals.filter_goals(
-                    manual=manual,
-                    do_less=do_less,
-                    done_today=done_today,
-                    days=days,
-                    since=since,
-                    finished=finished,
-                    n=n,
-                    over_rate=over_rate,
+                click.confirm("Continue?", default=True, abort=True)
+                goals = (
+                    AllGoals()
+                    .ensure_datapoints()
+                    .filter_goals(
+                        manual=manual,
+                        do_less=do_less,
+                        done_today=done_today,
+                        days=days,
+                        since=since,
+                        finished=finished,
+                        n=n,
+                        over_rate=over_rate,
+                    )
                 )
                 display(goals)
-                click.confirm("Continue?", default=True, abort=True)
-                all_goals.ensure_datapoints()
         else:
             display(goals)
     else:
