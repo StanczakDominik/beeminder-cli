@@ -40,6 +40,7 @@ import functools
 from pprint import pprint
 from tabulate import tabulate
 import subprocess
+import dateparser
 
 __version__ = "0.1.0"
 
@@ -50,8 +51,13 @@ auth = {"username": username, "auth_token": os.environ["BEEMINDER_TOKEN"]}
 now = datetime.now()
 
 
-def increment_beeminder(desc, beeminder_goal, value=1):
-    data = {"value": value, "auth_token": beeminder_auth_token, "comment": desc}
+def increment_beeminder(desc, beeminder_goal, value=1, date=None):
+    data = {
+        "value": value,
+        "auth_token": beeminder_auth_token,
+        "comment": desc,
+        "date": date,
+    }
 
     response = requests.post(
         f"https://www.beeminder.com/api/v1/users/{username}/goals/{beeminder_goal}/datapoints.json",
@@ -323,13 +329,13 @@ class Goal:
         else:
             raise ValueError("Wrong color, this should not be possible")
 
-    def update(self, value, description=None):
+    def update(self, value, description=None, date=None):
         if value is None:
             value = 1
         if description is None:
             description = self.default_description
         click.echo(f"Updating {self} with {value} and description {description}")
-        return_value = increment_beeminder(description, self.slug, value)
+        return_value = increment_beeminder(description, self.slug, value, date)
         self.get_full_data()
         return return_value
 
@@ -785,9 +791,12 @@ def show(goal):
 @click.argument("goal", type=str)
 @click.argument("update_value", required=False)
 @click.argument("description", type=str, required=False)
-def update(goal, update_value, description=None):
+@click.option("-d", "--date", type=str, default=None)
+def update(goal, update_value, description=None, date=None):
     goal = all_goals.pick_goal(slug=goal)
-    goal.update(update_value, description)
+    if date is not None:
+        date = dateparser.parse(date)
+    goal.update(update_value, description, date)
 
 
 @beeminder.command()
