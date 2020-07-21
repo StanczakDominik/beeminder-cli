@@ -93,6 +93,7 @@ class Datapoint:
 
 
 class Goal:
+    now = datetime.now()
     """Wraps a Beeminder goal."""
 
     def __init__(self, **goal):
@@ -382,7 +383,18 @@ class TodoistGoal(Goal):
             parent["children_ids"] = [child["id"] for child in these_children]
 
 
-class TodoistBacklog(TodoistGoal):
+class LinearBacklogMixIn:
+    def update(self, *args, **kwargs):
+        dates = self.get_dates()
+
+        total = -np.sum(np.array(dates) - self.now)
+        total_days = total.days + total.seconds / 3600 / 24
+
+        message = f"Incremented {self.slug} to {total_days} automatically from {len(dates)} items at {now}"
+        super().update(total_days, message)
+
+
+class TodoistBacklog(LinearBacklogMixIn, TodoistGoal):
     @staticmethod
     def _filter(task):
         if task["checked"]:
@@ -401,15 +413,6 @@ class TodoistBacklog(TodoistGoal):
         undone_tasks = self.api.items.all(self._filter)
         dates = [dateutil.parser.parse(task["date_added"]) for task in undone_tasks]
         return dates
-
-    def update(self, *args, **kwargs):
-        dates = self.get_dates()
-
-        total = -np.sum(np.array(dates) - self.now)
-        total_days = total.days + total.seconds / 3600 / 24
-
-        message = f"Incremented {self.slug} to {total_days} automatically from {len(dates)} items at {now}"
-        super().update(total_days, message)
 
 
 class TodoistNumberOfTasksGoal(TodoistGoal):
@@ -455,7 +458,7 @@ class TodoistInbox(TodoistNumberOfTasksGoal):
         )  # TODO configurable
 
 
-class YoutubeBacklogGoal(Goal):
+class YoutubeBacklogGoal(LinearBacklogMixIn, Goal):
     def get_dates(self):
         import pafy
 
@@ -466,14 +469,6 @@ class YoutubeBacklogGoal(Goal):
             for item in playlist["items"]
         ]
         return dates
-
-    def update(self, *args, **kwargs):
-        dates = self.get_dates()
-        total = -np.sum(np.array(dates) - now)
-        total_days = total.days + total.seconds / 3600 / 24
-
-        message = f"Incremented {self.slug} to {total_days} automatically from {len(dates)} items at {now}"
-        super().update(total_days, message)
 
 
 class CountGoal(Goal):
