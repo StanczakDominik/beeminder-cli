@@ -631,6 +631,7 @@ class AllGoals:
         since: int = None,
         days: int = None,
         due_today: bool = None,
+        runits: str = None,
     ):
         goals = sorted(self.goals, key=lambda g: g.losedate)
 
@@ -649,6 +650,8 @@ class AllGoals:
             conditions["since"] = lambda g: g.last_datapoint.datetime < now - timedelta(
                 days=since
             )
+        if runits is not None:
+            conditions["runits"] = lambda g: g.runits == runits
         if days is not None:
             conditions["in_days"] = lambda g: g.losedate <= now + timedelta(days=days)
 
@@ -692,6 +695,7 @@ def ensure_datapoints(goals):
 @click.option("-s", "--since", type=int)
 @click.option("-f/-nf", "--finished/--not-finished", default=False)
 @click.option("-n", type=int)
+@click.option("--runits", type=str, default=None)
 @click.option("-r", "--random", is_flag=True)
 @click.option("-w", "--watch", is_flag=True)
 @click.option("--step", type=int, default=3)
@@ -706,6 +710,7 @@ def beeminder(
     finished=False,
     n=None,
     over_rate=None,
+    runits=None,
     # commands
     random=False,
     watch=False,
@@ -723,6 +728,7 @@ def beeminder(
                 since=since,
                 finished=finished,
                 n=n,
+                runits=runits,
                 over_rate=over_rate,
             )
         )
@@ -765,6 +771,7 @@ def beeminder(
                         since=since,
                         finished=finished,
                         n=n,
+                        runits=runits,
                         over_rate=over_rate,
                     )
                 )
