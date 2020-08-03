@@ -388,7 +388,10 @@ class LinearBacklogMixIn:
         dates = self.get_dates()
 
         total = -np.sum(np.array(dates) - self.now)
-        total_days = total.days + total.seconds / 3600 / 24
+        try:
+            total_days = total.days + total.seconds / 3600 / 24
+        except AttributeError:
+            total_days = 0
 
         message = f"Incremented {self.slug} to {total_days} automatically from {len(dates)} items at {now}"
         super().update(total_days, message)
